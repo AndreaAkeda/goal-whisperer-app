@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -29,128 +28,150 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Fetch live matches from Football-Data.org API
-    // Using free tier which includes major European leagues
-    const response = await fetch('https://api.football-data.org/v4/matches?status=LIVE', {
-      headers: {
-        'X-Auth-Token': Deno.env.get('FOOTBALL_DATA_API_KEY') || ''
-      }
-    })
+    console.log('🔄 Iniciando busca por jogos ao vivo...')
 
-    if (!response.ok) {
-      console.log('Football API Error:', response.status, response.statusText)
-      // Return existing data if API fails
-      const { data: existingMatches } = await supabaseClient
-        .from('matches')
-        .select('*')
-        .eq('status', 'live')
+    let apiMatches: FootballMatch[] = []
+    let apiError = null
+
+    // Tentar buscar da API Football-Data.org
+    try {
+      const apiKey = Deno.env.get('FOOTBALL_DATA_API_KEY')
       
-      return new Response(
-        JSON.stringify({ matches: existingMatches || [] }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      if (!apiKey) {
+        console.log('❌ Chave da API Football-Data não configurada')
+        apiError = 'API key not configured'
+      } else {
+        console.log('🌐 Buscando jogos da API Football-Data.org...')
+        
+        const response = await fetch('https://api.football-data.org/v4/matches?status=LIVE', {
+          headers: {
+            'X-Auth-Token': apiKey
+          }
+        })
+
+        console.log(`📡 Resposta da API: ${response.status} ${response.statusText}`)
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.log(`❌ Erro da API: ${errorText}`)
+          apiError = `API returned ${response.status}: ${errorText}`
+        } else {
+          const data = await response.json()
+          apiMatches = data.matches || []
+          console.log(`✅ API retornou ${apiMatches.length} jogos ao vivo`)
+          
+          // Log dos jogos encontrados
+          if (apiMatches.length > 0) {
+            apiMatches.forEach(match => {
+              console.log(`⚽ ${match.homeTeam.name} vs ${match.awayTeam.name} (${match.competition.name})`)
+            })
+          }
+        }
+      }
+    } catch (error) {
+      console.log('❌ Erro ao buscar da API:', error)
+      apiError = error.message
     }
 
-    const data = await response.json()
-    const matches = data.matches || []
+    // Processar jogos da API se houver
+    if (apiMatches.length > 0) {
+      console.log(`🔄 Processando ${apiMatches.length} jogos da API...`)
+      
+      for (const match of apiMatches.slice(0, 10)) {
+        const matchData = {
+          home_team: match.homeTeam.name,
+          away_team: match.awayTeam.name,
+          league: match.competition.name,
+          status: 'live',
+          minute: match.minute || 0,
+          score_home: match.score.fullTime.home || 0,
+          score_away: match.score.fullTime.away || 0,
+          total_goals: (match.score.fullTime.home || 0) + (match.score.fullTime.away || 0),
+          kickoff_time: match.utcDate,
+          updated_at: new Date().toISOString()
+        }
 
-    console.log(`Fetched ${matches.length} live matches from API`)
-
-    // Update or insert matches in our database
-    for (const match of matches.slice(0, 10)) { // Limit to 10 matches
-      const matchData = {
-        home_team: match.homeTeam.name,
-        away_team: match.awayTeam.name,
-        league: match.competition.name,
-        status: 'live',
-        minute: match.minute || 0,
-        score_home: match.score.fullTime.home || 0,
-        score_away: match.score.fullTime.away || 0,
-        total_goals: (match.score.fullTime.home || 0) + (match.score.fullTime.away || 0),
-        kickoff_time: match.utcDate,
-        updated_at: new Date().toISOString()
-      }
-
-      // Check if match already exists
-      const { data: existingMatch } = await supabaseClient
-        .from('matches')
-        .select('id')
-        .eq('home_team', match.homeTeam.name)
-        .eq('away_team', match.awayTeam.name)
-        .eq('kickoff_time', match.utcDate)
-        .single()
-
-      if (existingMatch) {
-        // Update existing match
-        await supabaseClient
+        // Verificar se o jogo já existe
+        const { data: existingMatch } = await supabaseClient
           .from('matches')
-          .update(matchData)
-          .eq('id', existingMatch.id)
-      } else {
-        // Insert new match
-        const { data: newMatch } = await supabaseClient
-          .from('matches')
-          .insert(matchData)
           .select('id')
+          .eq('home_team', match.homeTeam.name)
+          .eq('away_team', match.awayTeam.name)
+          .eq('kickoff_time', match.utcDate)
           .single()
 
-        if (newMatch) {
-          // Generate realistic analysis for the match
-          const totalGoals = matchData.total_goals
-          const minute = matchData.minute
-
-          // Calculate probability based on current goals and time
-          let under45Probability = 85 - (totalGoals * 15) - (minute * 0.2)
-          under45Probability = Math.max(20, Math.min(95, under45Probability))
-
-          const currentOdds = 1.2 + (totalGoals * 0.3) + Math.random() * 0.4
-          const recommendedOdds = currentOdds * (1 + (Math.random() - 0.5) * 0.1)
-          const evPercentage = ((recommendedOdds / currentOdds - 1) * 100)
-
-          let recommendation = 'monitor'
-          if (evPercentage > 5) recommendation = 'enter'
-          if (evPercentage < -5) recommendation = 'avoid'
-
-          // Insert analysis
+        if (existingMatch) {
           await supabaseClient
-            .from('match_analysis')
-            .insert({
-              match_id: newMatch.id,
-              under_45_probability: under45Probability,
-              current_odds: currentOdds,
-              recommended_odds: recommendedOdds,
-              ev_percentage: evPercentage,
-              recommendation: recommendation,
-              confidence_level: under45Probability > 70 ? 'high' : 'medium',
-              rating: Math.floor(under45Probability * 0.8 + Math.random() * 20)
-            })
+            .from('matches')
+            .update(matchData)
+            .eq('id', existingMatch.id)
+        } else {
+          // ... keep existing code (insert new match with analysis and metrics)
+          const { data: newMatch } = await supabaseClient
+            .from('matches')
+            .insert(matchData)
+            .select('id')
+            .single()
 
-          // Insert metrics
-          const xgHome = Math.random() * 2.5
-          const xgAway = Math.random() * 2.5
-          
-          await supabaseClient
-            .from('match_metrics')
-            .insert({
-              match_id: newMatch.id,
-              xg_home: xgHome,
-              xg_away: xgAway,
-              xg_total: xgHome + xgAway,
-              possession_home: 45 + Math.random() * 20,
-              possession_away: 45 + Math.random() * 20,
-              dangerous_attacks: Math.floor(Math.random() * 15) + 5,
-              shots_home: Math.floor(Math.random() * 10) + 2,
-              shots_away: Math.floor(Math.random() * 10) + 2,
-              shots_on_target_home: Math.floor(Math.random() * 5) + 1,
-              shots_on_target_away: Math.floor(Math.random() * 5) + 1,
-              corners_home: Math.floor(Math.random() * 8),
-              corners_away: Math.floor(Math.random() * 8)
-            })
+          if (newMatch) {
+            const totalGoals = matchData.total_goals
+            const minute = matchData.minute
+
+            let under45Probability = 85 - (totalGoals * 15) - (minute * 0.2)
+            under45Probability = Math.max(20, Math.min(95, under45Probability))
+
+            const currentOdds = 1.2 + (totalGoals * 0.3) + Math.random() * 0.4
+            const recommendedOdds = currentOdds * (1 + (Math.random() - 0.5) * 0.1)
+            const evPercentage = ((recommendedOdds / currentOdds - 1) * 100)
+
+            let recommendation = 'monitor'
+            if (evPercentage > 5) recommendation = 'enter'
+            if (evPercentage < -5) recommendation = 'avoid'
+
+            await supabaseClient
+              .from('match_analysis')
+              .insert({
+                match_id: newMatch.id,
+                under_45_probability: under45Probability,
+                current_odds: currentOdds,
+                recommended_odds: recommendedOdds,
+                ev_percentage: evPercentage,
+                recommendation: recommendation,
+                confidence_level: under45Probability > 70 ? 'high' : 'medium',
+                rating: Math.floor(under45Probability * 0.8 + Math.random() * 20)
+              })
+
+            const xgHome = Math.random() * 2.5
+            const xgAway = Math.random() * 2.5
+            
+            await supabaseClient
+              .from('match_metrics')
+              .insert({
+                match_id: newMatch.id,
+                xg_home: xgHome,
+                xg_away: xgAway,
+                xg_total: xgHome + xgAway,
+                possession_home: 45 + Math.random() * 20,
+                possession_away: 45 + Math.random() * 20,
+                dangerous_attacks: Math.floor(Math.random() * 15) + 5,
+                shots_home: Math.floor(Math.random() * 10) + 2,
+                shots_away: Math.floor(Math.random() * 10) + 2,
+                shots_on_target_home: Math.floor(Math.random() * 5) + 1,
+                shots_on_target_away: Math.floor(Math.random() * 5) + 1,
+                corners_home: Math.floor(Math.random() * 8),
+                corners_away: Math.floor(Math.random() * 8)
+              })
+          }
         }
       }
     }
 
-    // Fetch updated matches with analysis
+    // Se não há jogos da API, manter os dados de demonstração existentes
+    if (apiMatches.length === 0) {
+      console.log('📝 Nenhum jogo da API, mantendo dados de demonstração existentes')
+    }
+
+    // Buscar todos os jogos ao vivo (API + demonstração)
     const { data: updatedMatches } = await supabaseClient
       .from('matches')
       .select(`
@@ -161,10 +182,26 @@ Deno.serve(async (req) => {
       .eq('status', 'live')
       .order('minute', { ascending: false })
 
-    console.log(`Returning ${updatedMatches?.length || 0} live matches`)
+    const apiMatchesCount = updatedMatches?.filter(match => 
+      !['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
+    ).length || 0
+
+    const demoMatchesCount = updatedMatches?.filter(match => 
+      ['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
+    ).length || 0
+
+    console.log(`📊 Retornando: ${apiMatchesCount} jogos da API + ${demoMatchesCount} de demonstração`)
 
     return new Response(
-      JSON.stringify({ matches: updatedMatches || [] }),
+      JSON.stringify({ 
+        matches: updatedMatches || [],
+        meta: {
+          api_matches: apiMatchesCount,
+          demo_matches: demoMatchesCount,
+          api_error: apiError,
+          total: updatedMatches?.length || 0
+        }
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200 
@@ -172,9 +209,13 @@ Deno.serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Error in fetch-live-matches:', error)
+    console.error('❌ Erro geral na função:', error)
     return new Response(
-      JSON.stringify({ error: 'Failed to fetch live matches', details: error.message }),
+      JSON.stringify({ 
+        error: 'Erro interno do servidor', 
+        details: error.message,
+        matches: []
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500 

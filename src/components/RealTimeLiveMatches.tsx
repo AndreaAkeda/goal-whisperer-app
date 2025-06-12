@@ -14,7 +14,8 @@ import {
   Zap,
   RefreshCw,
   Wifi,
-  WifiOff
+  WifiOff,
+  Info
 } from 'lucide-react';
 import { useRealTimeMatches } from '@/hooks/useRealTimeMatches';
 import type { MatchWithAnalysis } from '@/hooks/useMatches';
@@ -51,20 +52,26 @@ const getEVColor = (evPercentage: number) => {
   return 'text-warning';
 };
 
-const MatchCard = ({ match }: { match: MatchWithAnalysis }) => {
+const MatchCard = ({ match, isRealData }: { match: MatchWithAnalysis; isRealData: boolean }) => {
   const analysis = match.match_analysis?.[0];
   const metrics = match.match_metrics?.[0];
 
   return (
-    <Card className="border-l-4 border-l-primary">
+    <Card className={`border-l-4 ${isRealData ? 'border-l-success' : 'border-l-warning'}`}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-info" />
-            <Badge variant="secondary" className="bg-info/10 text-info">
+            <Activity className={`h-4 w-4 ${isRealData ? 'text-success' : 'text-warning'}`} />
+            <Badge variant="secondary" className={isRealData ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}>
               {match.minute}'
             </Badge>
             <span className="text-sm text-muted-foreground">{match.league}</span>
+            {!isRealData && (
+              <Badge variant="outline" className="text-xs">
+                <Info className="h-3 w-3 mr-1" />
+                DEMO
+              </Badge>
+            )}
           </div>
           <div className="text-right">
             <div className="text-lg font-bold">
@@ -136,6 +143,19 @@ const MatchCard = ({ match }: { match: MatchWithAnalysis }) => {
 export const RealTimeLiveMatches = () => {
   const { data: liveMatches = [], isLoading, error, isError, refreshMatches, isRefreshing } = useRealTimeMatches();
 
+  // Detectar se os dados são reais (ligas europeias) ou simulados (brasileirão)
+  const hasRealData = liveMatches.some(match => 
+    !['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
+  );
+
+  const realMatches = liveMatches.filter(match => 
+    !['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
+  );
+
+  const simulatedMatches = liveMatches.filter(match => 
+    ['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
+  );
+
   if (error) {
     return (
       <Card>
@@ -181,10 +201,18 @@ export const RealTimeLiveMatches = () => {
       <Card>
         <CardContent className="p-8 text-center">
           <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <CardTitle className="mb-2">Nenhum jogo ao vivo</CardTitle>
+          <CardTitle className="mb-2">Nenhum jogo encontrado</CardTitle>
           <p className="text-muted-foreground mb-4">
             Não há jogos das principais ligas europeias acontecendo no momento.
           </p>
+          <div className="bg-info/10 p-4 rounded-lg text-left mb-4">
+            <p className="text-sm">
+              <strong>⏰ Melhores horários para jogos europeus:</strong><br/>
+              • Sábados/Domingos: 13h-17h (horário brasileiro)<br/>
+              • Quartas: Champions League (16h-18h)<br/>
+              • Quintas: Europa League (16h-18h)
+            </p>
+          </div>
           <Button onClick={refreshMatches} variant="outline" disabled={isRefreshing}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             {isRefreshing ? 'Atualizando...' : 'Verificar Jogos'}
@@ -199,11 +227,24 @@ export const RealTimeLiveMatches = () => {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xl font-semibold flex items-center gap-2">
-            <Wifi className="h-5 w-5 text-success" />
-            Jogos ao Vivo (Dados Reais)
+            {hasRealData ? (
+              <>
+                <Wifi className="h-5 w-5 text-success" />
+                Jogos ao Vivo (API Football-Data.org)
+              </>
+            ) : (
+              <>
+                <Activity className="h-5 w-5 text-warning" />
+                Dados de Demonstração
+              </>
+            )}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {liveMatches.length} jogo(s) em andamento • Atualização automática
+            {hasRealData ? (
+              <>Dados reais • {realMatches.length} jogo(s) da API • Atualização automática</>
+            ) : (
+              <>Simulação • {simulatedMatches.length} jogo(s) demo • Aguardando jogos europeus</>
+            )}
           </p>
         </div>
         <Button 
@@ -217,11 +258,52 @@ export const RealTimeLiveMatches = () => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {liveMatches.map((match) => (
-          <MatchCard key={match.id} match={match} />
-        ))}
-      </div>
+      {!hasRealData && (
+        <Card className="border-warning">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <Info className="h-5 w-5 text-warning" />
+              <div>
+                <p className="text-sm font-medium">Usando dados de demonstração</p>
+                <p className="text-xs text-muted-foreground">
+                  A API Football-Data.org não retornou jogos europeus ao vivo no momento. 
+                  Os dados mostrados são simulados para demonstração do sistema.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Dados Reais da API */}
+      {realMatches.length > 0 && (
+        <div>
+          <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Wifi className="h-4 w-4 text-success" />
+            Dados Reais da API ({realMatches.length})
+          </h4>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {realMatches.map((match) => (
+              <MatchCard key={match.id} match={match} isRealData={true} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Dados Simulados */}
+      {simulatedMatches.length > 0 && (
+        <div>
+          <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Activity className="h-4 w-4 text-warning" />
+            Dados de Demonstração ({simulatedMatches.length})
+          </h4>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {simulatedMatches.map((match) => (
+              <MatchCard key={match.id} match={match} isRealData={false} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
