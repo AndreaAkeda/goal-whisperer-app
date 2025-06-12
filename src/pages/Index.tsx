@@ -103,7 +103,7 @@ const Index = () => {
                   Alertas de Oportunidade
                 </h4>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• EV positivo alto (>10%)</li>
+                  <li>• EV positivo alto ({'>'}10%)</li>
                   <li>• Novas oportunidades de entrada</li>
                   <li>• Melhoria significativa no EV</li>
                   <li>• Alta probabilidade com EV positivo</li>
@@ -116,7 +116,7 @@ const Index = () => {
                   Alertas de Mudança
                 </h4>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Mudanças significativas de odds (>5%)</li>
+                  <li>• Mudanças significativas de odds ({'>'}5%)</li>
                   <li>• Alterações na recomendação</li>
                   <li>• Mudanças na probabilidade</li>
                   <li>• Novos jogos detectados</li>
