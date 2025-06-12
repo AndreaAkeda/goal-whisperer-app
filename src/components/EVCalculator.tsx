@@ -99,7 +99,6 @@ export const EVCalculator = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Inputs */}
         <Card>
           <CardHeader>
             <CardTitle>Parâmetros da Aposta</CardTitle>
@@ -163,7 +162,6 @@ export const EVCalculator = () => {
           </CardContent>
         </Card>
 
-        {/* Resultados */}
         <Card>
           <CardHeader>
             <CardTitle>Resultado da Análise</CardTitle>
@@ -174,7 +172,6 @@ export const EVCalculator = () => {
           <CardContent>
             {results ? (
               <div className="space-y-6">
-                {/* EV Principal */}
                 <div className="text-center p-6 bg-muted/50 rounded-lg">
                   <p className="text-sm text-muted-foreground mb-2">Expected Value</p>
                   <p className={`text-4xl font-bold ${getEVColor()}`}>
@@ -190,7 +187,6 @@ export const EVCalculator = () => {
 
                 <Separator />
 
-                {/* Detalhes */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-3 bg-success/10 rounded-lg">
                     <div className="flex items-center gap-2">
@@ -215,7 +211,6 @@ export const EVCalculator = () => {
 
                 <Separator />
 
-                {/* Interpretação */}
                 <div className="space-y-2">
                   <h4 className="font-medium">Interpretação:</h4>
                   {results.evPercentage > 10 && (
@@ -235,7 +230,6 @@ export const EVCalculator = () => {
                   )}
                 </div>
 
-                {/* Fórmula */}
                 <div className="p-3 bg-muted/30 rounded-lg">
                   <p className="text-xs font-mono text-muted-foreground text-center">
                     EV = (P × Lucro) + ((1-P) × Perda)
@@ -254,7 +248,6 @@ export const EVCalculator = () => {
         </Card>
       </div>
 
-      {/* Dicas */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">💡 Dicas para Usar a Calculadora</CardTitle>
@@ -272,9 +265,9 @@ export const EVCalculator = () => {
             <div className="space-y-2">
               <h4 className="font-medium">Expected Value:</h4>
               <ul className="space-y-1 text-muted-foreground">
-                <li>• EV > 5%: Apostar com confiança</li>
+                <li>• EV &gt; 5%: Apostar com confiança</li>
                 <li>• EV 0-5%: Avaliar outros fatores</li>
-                <li>• EV < 0%: Evitar a aposta</li>
+                <li>• EV &lt; 0%: Evitar a aposta</li>
               </ul>
             </div>
           </div>
