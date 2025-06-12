@@ -15,18 +15,18 @@ import {
   Calculator,
   Zap
 } from 'lucide-react';
-import { LiveMatches } from '@/components/LiveMatches';
+import { RealTimeLiveMatches } from '@/components/RealTimeLiveMatches';
 import { PreLiveMatches } from '@/components/PreLiveMatches';
 import { EVCalculator } from '@/components/EVCalculator';
 import { AlertsList } from '@/components/AlertsList';
 import { useUnreadAlerts } from '@/hooks/useAlerts';
-import { useLiveMatches } from '@/hooks/useMatches';
+import { useRealTimeMatches } from '@/hooks/useRealTimeMatches';
 
 const Index = () => {
   const [totalProfit, setTotalProfit] = useState(2847.50);
   
   const { data: unreadAlerts = [] } = useUnreadAlerts();
-  const { data: liveMatches = [] } = useLiveMatches();
+  const { data: liveMatches = [] } = useRealTimeMatches();
 
   // Calcular estatísticas das análises
   const todayPredictions = liveMatches.length + 7; // Simulado
@@ -90,7 +90,7 @@ const Index = () => {
               <div className="text-2xl font-bold">{activeMatches}</div>
               <p className="text-xs text-muted-foreground flex items-center mt-1">
                 <Clock className="h-3 w-3 mr-1" />
-                Monitorando agora
+                Dados reais ao vivo
               </p>
             </CardContent>
           </Card>
@@ -151,7 +151,7 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="live" className="space-y-6">
-            <LiveMatches />
+            <RealTimeLiveMatches />
           </TabsContent>
 
           <TabsContent value="prelive" className="space-y-6">
