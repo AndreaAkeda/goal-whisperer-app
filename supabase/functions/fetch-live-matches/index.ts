@@ -51,7 +51,6 @@ Deno.serve(async (req) => {
     // Verificar se a chave da API está configurada
     const apiKey = Deno.env.get('API_FOOTBALL_KEY')
     console.log('🔑 API Football Key configurada:', apiKey ? 'SIM' : 'NÃO')
-    console.log('🔑 Primeiros 10 caracteres da key:', apiKey ? apiKey.substring(0, 10) + '...' : 'N/A')
 
     if (!apiKey) {
       console.log('❌ Chave da API Football não configurada')
@@ -69,53 +68,35 @@ Deno.serve(async (req) => {
         })
 
         console.log(`📡 Status da resposta: ${response.status}`)
-        console.log(`📡 Status text: ${response.statusText}`)
-        console.log(`📡 Headers da resposta:`, Object.fromEntries(response.headers.entries()))
 
         if (!response.ok) {
           const errorText = await response.text()
           console.log(`❌ Erro da API (${response.status}): ${errorText}`)
           apiError = `API returned ${response.status}: ${errorText}`
-          apiResponse = { status: response.status, error: errorText }
         } else {
           const data = await response.json()
-          console.log('📊 Estrutura da resposta da API:', JSON.stringify(data, null, 2))
-          
           apiMatches = data.response || []
           console.log(`✅ API retornou ${apiMatches.length} jogos`)
           
           if (apiMatches.length > 0) {
-            console.log('⚽ Jogos encontrados:')
-            apiMatches.forEach((match, index) => {
+            console.log('⚽ Primeiros 3 jogos encontrados:')
+            apiMatches.slice(0, 3).forEach((match, index) => {
               console.log(`  ${index + 1}. ${match.teams.home.name} vs ${match.teams.away.name}`)
               console.log(`     Liga: ${match.league.name} (${match.league.country})`)
-              console.log(`     Status: ${match.fixture.status.short}`)
-              console.log(`     Minuto: ${match.fixture.status.elapsed}`)
+              console.log(`     Status: ${match.fixture.status.short}, Minuto: ${match.fixture.status.elapsed}`)
               console.log(`     Placar: ${match.goals.home} - ${match.goals.away}`)
-              console.log(`     Data: ${match.fixture.date}`)
-              console.log('     ---')
             })
-          } else {
-            console.log('📝 Nenhum jogo ao vivo encontrado na API')
-          }
-          
-          apiResponse = { 
-            status: response.status, 
-            matchCount: apiMatches.length,
-            data: data 
           }
         }
       } catch (error) {
         console.log('❌ Erro ao fazer requisição:', error.message)
-        console.log('❌ Stack trace:', error.stack)
         apiError = `Request failed: ${error.message}`
-        apiResponse = { error: error.message, stack: error.stack }
       }
     }
 
     // Processar jogos da API se houver
     if (apiMatches.length > 0) {
-      console.log(`🔄 Processando ${apiMatches.length} jogos da API...`)
+      console.log(`🔄 Processando ${Math.min(apiMatches.length, 10)} jogos da API...`)
       
       for (const match of apiMatches.slice(0, 10)) {
         // Filtrar apenas jogos que estão realmente ao vivo
@@ -123,6 +104,7 @@ Deno.serve(async (req) => {
           continue
         }
 
+        // Não incluir total_goals pois é uma coluna gerada
         const matchData = {
           home_team: match.teams.home.name,
           away_team: match.teams.away.name,
@@ -131,12 +113,11 @@ Deno.serve(async (req) => {
           minute: match.fixture.status.elapsed || 0,
           score_home: match.goals.home || 0,
           score_away: match.goals.away || 0,
-          total_goals: (match.goals.home || 0) + (match.goals.away || 0),
           kickoff_time: match.fixture.date,
           updated_at: new Date().toISOString()
         }
 
-        console.log(`💾 Salvando jogo: ${matchData.home_team} vs ${matchData.away_team}`)
+        console.log(`💾 Processando jogo: ${matchData.home_team} vs ${matchData.away_team}`)
 
         // Verificar se o jogo já existe
         const { data: existingMatch } = await supabaseClient
@@ -149,10 +130,16 @@ Deno.serve(async (req) => {
 
         if (existingMatch) {
           console.log(`🔄 Atualizando jogo existente: ${matchData.home_team} vs ${matchData.away_team}`)
-          await supabaseClient
+          const { error: updateError } = await supabaseClient
             .from('matches')
             .update(matchData)
             .eq('id', existingMatch.id)
+          
+          if (updateError) {
+            console.log('❌ Erro ao atualizar jogo:', updateError)
+          } else {
+            console.log('✅ Jogo atualizado com sucesso')
+          }
         } else {
           console.log(`➕ Criando novo jogo: ${matchData.home_team} vs ${matchData.away_team}`)
           
@@ -167,8 +154,9 @@ Deno.serve(async (req) => {
           } else if (newMatch) {
             console.log(`✅ Jogo criado com ID: ${newMatch.id}`)
             
-            const totalGoals = matchData.total_goals
-            const minute = matchData.minute
+            // Criar análise para o jogo
+            const totalGoals = (match.goals.home || 0) + (match.goals.away || 0)
+            const minute = match.fixture.status.elapsed || 0
 
             let under45Probability = 85 - (totalGoals * 15) - (minute * 0.2)
             under45Probability = Math.max(20, Math.min(95, under45Probability))
@@ -181,8 +169,7 @@ Deno.serve(async (req) => {
             if (evPercentage > 5) recommendation = 'enter'
             if (evPercentage < -5) recommendation = 'avoid'
 
-            console.log(`📊 Criando análise para jogo ${newMatch.id}`)
-            await supabaseClient
+            const { error: analysisError } = await supabaseClient
               .from('match_analysis')
               .insert({
                 match_id: newMatch.id,
@@ -195,11 +182,15 @@ Deno.serve(async (req) => {
                 rating: Math.floor(under45Probability * 0.8 + Math.random() * 20)
               })
 
+            if (analysisError) {
+              console.log('❌ Erro ao criar análise:', analysisError)
+            }
+
+            // Criar métricas para o jogo
             const xgHome = Math.random() * 2.5
             const xgAway = Math.random() * 2.5
             
-            console.log(`📈 Criando métricas para jogo ${newMatch.id}`)
-            await supabaseClient
+            const { error: metricsError } = await supabaseClient
               .from('match_metrics')
               .insert({
                 match_id: newMatch.id,
@@ -216,6 +207,10 @@ Deno.serve(async (req) => {
                 corners_home: Math.floor(Math.random() * 8),
                 corners_away: Math.floor(Math.random() * 8)
               })
+
+            if (metricsError) {
+              console.log('❌ Erro ao criar métricas:', metricsError)
+            }
           }
         }
       }
@@ -256,7 +251,6 @@ Deno.serve(async (req) => {
           api_matches: apiMatchesCount,
           demo_matches: demoMatchesCount,
           api_error: apiError,
-          api_response: apiResponse,
           api_key_configured: !!apiKey,
           total: updatedMatches?.length || 0,
           timestamp: new Date().toISOString()
@@ -270,13 +264,11 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Erro geral na função:', error)
-    console.error('❌ Stack trace completo:', error.stack)
     
     return new Response(
       JSON.stringify({ 
         error: 'Erro interno do servidor', 
         details: error.message,
-        stack: error.stack,
         matches: [],
         meta: {
           api_matches: 0,
