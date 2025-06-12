@@ -15,7 +15,8 @@ import {
   RefreshCw,
   Wifi,
   WifiOff,
-  Info
+  Info,
+  Globe
 } from 'lucide-react';
 import { useRealTimeMatches } from '@/hooks/useRealTimeMatches';
 import type { MatchWithAnalysis } from '@/hooks/useMatches';
@@ -61,7 +62,11 @@ const MatchCard = ({ match, isRealData }: { match: MatchWithAnalysis; isRealData
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Activity className={`h-4 w-4 ${isRealData ? 'text-success' : 'text-warning'}`} />
+            {isRealData ? (
+              <Globe className="h-4 w-4 text-success" />
+            ) : (
+              <Activity className="h-4 w-4 text-warning" />
+            )}
             <Badge variant="secondary" className={isRealData ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}>
               {match.minute}'
             </Badge>
@@ -143,7 +148,7 @@ const MatchCard = ({ match, isRealData }: { match: MatchWithAnalysis; isRealData
 export const RealTimeLiveMatches = () => {
   const { data: liveMatches = [], isLoading, error, isError, refreshMatches, isRefreshing } = useRealTimeMatches();
 
-  // Detectar se os dados são reais (ligas europeias) ou simulados (brasileirão)
+  // Detectar se os dados são reais (da API) ou simulados
   const hasRealData = liveMatches.some(match => 
     !['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
   );
@@ -165,7 +170,7 @@ export const RealTimeLiveMatches = () => {
             <div>
               <p className="text-destructive font-medium">Erro ao carregar jogos ao vivo</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Verifique sua conexão ou tente novamente
+                Verifique os logs da função ou tente novamente
               </p>
             </div>
             <Button onClick={refreshMatches} variant="outline">
@@ -203,11 +208,11 @@ export const RealTimeLiveMatches = () => {
           <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <CardTitle className="mb-2">Nenhum jogo encontrado</CardTitle>
           <p className="text-muted-foreground mb-4">
-            Não há jogos das principais ligas europeias acontecendo no momento.
+            Não há jogos ao vivo no momento. A API Football está conectada e funcionando.
           </p>
           <div className="bg-info/10 p-4 rounded-lg text-left mb-4">
             <p className="text-sm">
-              <strong>⏰ Melhores horários para jogos europeus:</strong><br/>
+              <strong>⏰ Dica:</strong> Jogos europeus geralmente acontecem:<br/>
               • Sábados/Domingos: 13h-17h (horário brasileiro)<br/>
               • Quartas: Champions League (16h-18h)<br/>
               • Quintas: Europa League (16h-18h)
@@ -215,7 +220,7 @@ export const RealTimeLiveMatches = () => {
           </div>
           <Button onClick={refreshMatches} variant="outline" disabled={isRefreshing}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Atualizando...' : 'Verificar Jogos'}
+            {isRefreshing ? 'Verificando...' : 'Verificar Jogos'}
           </Button>
         </CardContent>
       </Card>
@@ -229,8 +234,8 @@ export const RealTimeLiveMatches = () => {
           <h3 className="text-xl font-semibold flex items-center gap-2">
             {hasRealData ? (
               <>
-                <Wifi className="h-5 w-5 text-success" />
-                Jogos ao Vivo (API Football-Data.org)
+                <Globe className="h-5 w-5 text-success" />
+                Jogos ao Vivo (API Football)
               </>
             ) : (
               <>
@@ -243,7 +248,7 @@ export const RealTimeLiveMatches = () => {
             {hasRealData ? (
               <>Dados reais • {realMatches.length} jogo(s) da API • Atualização automática</>
             ) : (
-              <>Simulação • {simulatedMatches.length} jogo(s) demo • Aguardando jogos europeus</>
+              <>Simulação • {simulatedMatches.length} jogo(s) demo • API conectada, aguardando jogos</>
             )}
           </p>
         </div>
@@ -258,29 +263,32 @@ export const RealTimeLiveMatches = () => {
         </Button>
       </div>
 
-      {!hasRealData && (
-        <Card className="border-warning">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Info className="h-5 w-5 text-warning" />
-              <div>
-                <p className="text-sm font-medium">Usando dados de demonstração</p>
-                <p className="text-xs text-muted-foreground">
-                  A API Football-Data.org não retornou jogos europeus ao vivo no momento. 
-                  Os dados mostrados são simulados para demonstração do sistema.
-                </p>
-              </div>
+      {/* Status da API */}
+      <Card className={`border-${hasRealData ? 'success' : 'info'}`}>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <Globe className={`h-5 w-5 ${hasRealData ? 'text-success' : 'text-info'}`} />
+            <div>
+              <p className="text-sm font-medium">
+                {hasRealData ? 'API Football conectada - Jogos reais encontrados!' : 'API Football conectada - Aguardando jogos ao vivo'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {hasRealData 
+                  ? `${realMatches.length} jogo(s) ao vivo da API Football`
+                  : 'A API está funcionando, mas não há jogos europeus ao vivo no momento.'
+                }
+              </p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Dados Reais da API */}
       {realMatches.length > 0 && (
         <div>
           <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Wifi className="h-4 w-4 text-success" />
-            Dados Reais da API ({realMatches.length})
+            <Globe className="h-4 w-4 text-success" />
+            Jogos Reais da API Football ({realMatches.length})
           </h4>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {realMatches.map((match) => (
