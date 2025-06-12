@@ -1,149 +1,66 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  TrendingUp, 
-  TrendingDown, 
-  Clock, 
-  Target, 
-  Bell, 
-  Activity,
-  BarChart3,
+  Activity, 
+  Calendar, 
   Calculator,
+  Bell,
+  Target,
+  TrendingUp,
+  Clock,
   Zap
 } from 'lucide-react';
 import { RealTimeLiveMatches } from '@/components/RealTimeLiveMatches';
 import { PreLiveMatches } from '@/components/PreLiveMatches';
 import { EVCalculator } from '@/components/EVCalculator';
 import { AlertsList } from '@/components/AlertsList';
+import { AlertsBanner } from '@/components/AlertsBanner';
 import { useUnreadAlerts } from '@/hooks/useAlerts';
-import { useRealTimeMatches } from '@/hooks/useRealTimeMatches';
 
 const Index = () => {
-  const [totalProfit, setTotalProfit] = useState(2847.50);
-  
+  const [activeTab, setActiveTab] = useState('live');
   const { data: unreadAlerts = [] } = useUnreadAlerts();
-  const { data: liveMatches = [] } = useRealTimeMatches();
-
-  // Calcular estatísticas das análises
-  const todayPredictions = liveMatches.length + 7; // Simulado
-  const activeMatches = liveMatches.length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 dark">
-      <div className="container mx-auto p-6 space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted/30">
+      <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-success bg-clip-text text-transparent">
-              Packball Analytics
-            </h1>
-            <p className="text-lg text-muted-foreground mt-2">
-              Análise inteligente para apostas Under 4.5 Gols
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="sm" className="relative">
-              <Bell className="h-4 w-4 mr-2" />
-              Alertas
-              {unreadAlerts.length > 0 && (
-                <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center bg-destructive">
-                  {unreadAlerts.length}
-                </Badge>
-              )}
-            </Button>
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground">Lucro Total</p>
-              <p className="text-xl font-bold text-success">
-                R$ {totalProfit.toFixed(2)}
-              </p>
-            </div>
-          </div>
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent mb-4">
+            Under 4.5 Pro
+          </h1>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            Sistema avançado de análise para apostas Under 4.5 gols com dados em tempo real e alertas automáticos
+          </p>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="bg-gradient-to-br from-card to-card/50 border-primary/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Previsões Hoje</CardTitle>
-              <Target className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{todayPredictions}</div>
-              <p className="text-xs text-success flex items-center mt-1">
-                <TrendingUp className="h-3 w-3 mr-1" />
-                +2 vs ontem
-              </p>
-            </CardContent>
-          </Card>
+        {/* Alertas Banner */}
+        <AlertsBanner />
 
-          <Card className="bg-gradient-to-br from-card to-card/50 border-info/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Jogos Ativos</CardTitle>
-              <Activity className="h-4 w-4 text-info" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{activeMatches}</div>
-              <p className="text-xs text-muted-foreground flex items-center mt-1">
-                <Clock className="h-3 w-3 mr-1" />
-                Dados reais ao vivo
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-card to-card/50 border-success/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Taxa de Acerto</CardTitle>
-              <BarChart3 className="h-4 w-4 text-success" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">78.5%</div>
-              <p className="text-xs text-success flex items-center mt-1">
-                <TrendingUp className="h-3 w-3 mr-1" />
-                +3.2% este mês
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-card to-card/50 border-warning/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">EV Médio</CardTitle>
-              <Calculator className="h-4 w-4 text-warning" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">+12.3%</div>
-              <p className="text-xs text-warning flex items-center mt-1">
-                <Zap className="h-3 w-3 mr-1" />
-                Valor positivo
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Main Content */}
-        <Tabs defaultValue="live" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 bg-muted/50">
+        {/* Navigation Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-4 mb-8">
             <TabsTrigger value="live" className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
-              <span className="hidden sm:inline">Ao Vivo</span>
+              Ao Vivo
             </TabsTrigger>
-            <TabsTrigger value="prelive" className="flex items-center gap-2">
-              <Target className="h-4 w-4" />
-              <span className="hidden sm:inline">Pré-Live</span>
+            <TabsTrigger value="pre-live" className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Pré-Live
             </TabsTrigger>
             <TabsTrigger value="calculator" className="flex items-center gap-2">
               <Calculator className="h-4 w-4" />
-              <span className="hidden sm:inline">Calculadora</span>
+              Calculadora EV
             </TabsTrigger>
             <TabsTrigger value="alerts" className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
-              <span className="hidden sm:inline">Alertas</span>
+              Alertas
               {unreadAlerts.length > 0 && (
-                <Badge className="ml-1 h-4 w-4 p-0 text-xs">
+                <Badge variant="destructive" className="ml-1 px-1.5 py-0.5 text-xs">
                   {unreadAlerts.length}
                 </Badge>
               )}
@@ -154,7 +71,7 @@ const Index = () => {
             <RealTimeLiveMatches />
           </TabsContent>
 
-          <TabsContent value="prelive" className="space-y-6">
+          <TabsContent value="pre-live" className="space-y-6">
             <PreLiveMatches />
           </TabsContent>
 
@@ -166,6 +83,56 @@ const Index = () => {
             <AlertsList />
           </TabsContent>
         </Tabs>
+
+        {/* Sistema de Alertas Info */}
+        <Card className="mt-8 border-info">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-info" />
+              Sistema de Alertas Automáticos
+            </CardTitle>
+            <CardDescription>
+              Como funcionam os alertas automáticos do sistema
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-success" />
+                  Alertas de Oportunidade
+                </h4>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• EV positivo alto (>10%)</li>
+                  <li>• Novas oportunidades de entrada</li>
+                  <li>• Melhoria significativa no EV</li>
+                  <li>• Alta probabilidade com EV positivo</li>
+                </ul>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Target className="h-4 w-4 text-warning" />
+                  Alertas de Mudança
+                </h4>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• Mudanças significativas de odds (>5%)</li>
+                  <li>• Alterações na recomendação</li>
+                  <li>• Mudanças na probabilidade</li>
+                  <li>• Novos jogos detectados</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div className="bg-muted/50 p-4 rounded-lg">
+              <p className="text-sm">
+                <strong>📡 Atualização Automática:</strong> Os alertas são gerados automaticamente a cada minuto 
+                quando a função detecta mudanças nos jogos ao vivo. Você será notificado em tempo real sobre 
+                as melhores oportunidades!
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

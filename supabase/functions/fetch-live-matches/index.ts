@@ -29,6 +29,109 @@ interface ApiFootballMatch {
   }
 }
 
+interface MatchAnalysis {
+  match_id: string
+  under_45_probability: number
+  current_odds: number
+  recommended_odds: number
+  ev_percentage: number
+  recommendation: string
+  confidence_level: string
+  rating: number
+}
+
+async function createAlert(supabaseClient: any, matchId: string, alertType: string, title: string, message: string, priority: string = 'medium') {
+  console.log(`🔔 Criando alerta: ${title}`)
+  
+  const { error } = await supabaseClient
+    .from('alerts')
+    .insert({
+      match_id: matchId,
+      alert_type: alertType,
+      title: title,
+      message: message,
+      priority: priority,
+      is_read: false
+    })
+  
+  if (error) {
+    console.log('❌ Erro ao criar alerta:', error)
+  } else {
+    console.log('✅ Alerta criado com sucesso')
+  }
+}
+
+async function checkForAlerts(supabaseClient: any, matchId: string, homeTeam: string, awayTeam: string, analysis: MatchAnalysis, oldAnalysis?: MatchAnalysis) {
+  const matchName = `${homeTeam} vs ${awayTeam}`
+  
+  // Alerta para EV positivo alto (>10%)
+  if (analysis.ev_percentage > 10) {
+    await createAlert(
+      supabaseClient,
+      matchId,
+      'high_ev',
+      'EV Positivo Alto Detectado!',
+      `${matchName} tem EV de +${analysis.ev_percentage.toFixed(1)}% - Excelente oportunidade!`,
+      'high'
+    )
+  }
+  
+  // Alerta para nova oportunidade de entrada
+  if (analysis.recommendation === 'enter' && analysis.ev_percentage > 5) {
+    await createAlert(
+      supabaseClient,
+      matchId,
+      'entry_opportunity',
+      'Nova Oportunidade de Entrada',
+      `${matchName} - EV: +${analysis.ev_percentage.toFixed(1)}%, Prob: ${analysis.under_45_probability.toFixed(0)}%`,
+      'high'
+    )
+  }
+  
+  // Alerta para mudança significativa de odds (se temos análise anterior)
+  if (oldAnalysis) {
+    const oddsChange = Math.abs(analysis.current_odds - oldAnalysis.current_odds)
+    const oddsChangePercent = (oddsChange / oldAnalysis.current_odds) * 100
+    
+    if (oddsChangePercent > 5) {
+      const direction = analysis.current_odds > oldAnalysis.current_odds ? 'subiu' : 'caiu'
+      await createAlert(
+        supabaseClient,
+        matchId,
+        'odds_change',
+        'Mudança Significativa de Odds',
+        `${matchName} - Odd ${direction} de ${oldAnalysis.current_odds.toFixed(2)} para ${analysis.current_odds.toFixed(2)}`,
+        'medium'
+      )
+    }
+    
+    // Alerta para melhoria do EV
+    const evImprovement = analysis.ev_percentage - oldAnalysis.ev_percentage
+    if (evImprovement > 3) {
+      await createAlert(
+        supabaseClient,
+        matchId,
+        'ev_improvement',
+        'Melhoria no Expected Value',
+        `${matchName} - EV melhorou em +${evImprovement.toFixed(1)}% (agora ${analysis.ev_percentage.toFixed(1)}%)`,
+        'medium'
+      )
+    }
+  }
+  
+  // Alerta para alta probabilidade (>85%)
+  if (analysis.under_45_probability > 85 && analysis.ev_percentage > 0) {
+    await createAlert(
+      supabaseClient,
+      matchId,
+      'high_probability',
+      'Alta Probabilidade Detectada',
+      `${matchName} - ${analysis.under_45_probability.toFixed(0)}% de probabilidade com EV positivo`,
+      'medium'
+    )
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -117,17 +220,26 @@ Deno.serve(async (req) => {
 
         console.log(`💾 Processando jogo: ${matchData.home_team} vs ${matchData.away_team}`)
 
-        // Verificar se o jogo já existe
+        // Verificar se o jogo já existe e buscar análise anterior
         const { data: existingMatch } = await supabaseClient
           .from('matches')
-          .select('id')
+          .select(`
+            id,
+            match_analysis(*)
+          `)
           .eq('home_team', match.teams.home.name)
           .eq('away_team', match.teams.away.name)
           .eq('kickoff_time', match.fixture.date)
           .single()
 
+        let matchId: string
+        let oldAnalysis: MatchAnalysis | undefined
+
         if (existingMatch) {
           console.log(`🔄 Atualizando jogo existente: ${matchData.home_team} vs ${matchData.away_team}`)
+          matchId = existingMatch.id
+          oldAnalysis = existingMatch.match_analysis?.[0]
+          
           const { error: updateError } = await supabaseClient
             .from('matches')
             .update(matchData)
@@ -149,66 +261,80 @@ Deno.serve(async (req) => {
 
           if (insertError) {
             console.log('❌ Erro ao inserir jogo:', insertError)
+            continue
           } else if (newMatch) {
             console.log(`✅ Jogo criado com ID: ${newMatch.id}`)
-            
-            // Criar análise para o jogo
-            const totalGoals = (match.goals.home || 0) + (match.goals.away || 0)
-            const minute = match.fixture.status.elapsed || 0
+            matchId = newMatch.id
+          } else {
+            continue
+          }
+        }
 
-            let under45Probability = 85 - (totalGoals * 15) - (minute * 0.2)
-            under45Probability = Math.max(20, Math.min(95, under45Probability))
+        // Criar nova análise para o jogo
+        const totalGoals = (match.goals.home || 0) + (match.goals.away || 0)
+        const minute = match.fixture.status.elapsed || 0
 
-            const currentOdds = 1.2 + (totalGoals * 0.3) + Math.random() * 0.4
-            const recommendedOdds = currentOdds * (1 + (Math.random() - 0.5) * 0.1)
-            const evPercentage = ((recommendedOdds / currentOdds - 1) * 100)
+        let under45Probability = 85 - (totalGoals * 15) - (minute * 0.2)
+        under45Probability = Math.max(20, Math.min(95, under45Probability))
 
-            let recommendation = 'monitor'
-            if (evPercentage > 5) recommendation = 'enter'
-            if (evPercentage < -5) recommendation = 'avoid'
+        const currentOdds = 1.2 + (totalGoals * 0.3) + Math.random() * 0.4
+        const recommendedOdds = currentOdds * (1 + (Math.random() - 0.5) * 0.1)
+        const evPercentage = ((recommendedOdds / currentOdds - 1) * 100)
 
-            const { error: analysisError } = await supabaseClient
-              .from('match_analysis')
-              .insert({
-                match_id: newMatch.id,
-                under_45_probability: under45Probability,
-                current_odds: currentOdds,
-                recommended_odds: recommendedOdds,
-                ev_percentage: evPercentage,
-                recommendation: recommendation,
-                confidence_level: under45Probability > 70 ? 'high' : 'medium',
-                rating: Math.floor(under45Probability * 0.8 + Math.random() * 20)
-              })
+        let recommendation = 'monitor'
+        if (evPercentage > 5) recommendation = 'enter'
+        if (evPercentage < -5) recommendation = 'avoid'
 
-            if (analysisError) {
-              console.log('❌ Erro ao criar análise:', analysisError)
-            }
+        const newAnalysis: MatchAnalysis = {
+          match_id: matchId,
+          under_45_probability: under45Probability,
+          current_odds: currentOdds,
+          recommended_odds: recommendedOdds,
+          ev_percentage: evPercentage,
+          recommendation: recommendation,
+          confidence_level: under45Probability > 70 ? 'high' : 'medium',
+          rating: Math.floor(under45Probability * 0.8 + Math.random() * 20)
+        }
 
-            // Criar métricas para o jogo
-            const xgHome = Math.random() * 2.5
-            const xgAway = Math.random() * 2.5
-            
-            const { error: metricsError } = await supabaseClient
-              .from('match_metrics')
-              .insert({
-                match_id: newMatch.id,
-                xg_home: xgHome,
-                xg_away: xgAway,
-                xg_total: xgHome + xgAway,
-                possession_home: 45 + Math.random() * 20,
-                possession_away: 45 + Math.random() * 20,
-                dangerous_attacks: Math.floor(Math.random() * 15) + 5,
-                shots_home: Math.floor(Math.random() * 10) + 2,
-                shots_away: Math.floor(Math.random() * 10) + 2,
-                shots_on_target_home: Math.floor(Math.random() * 5) + 1,
-                shots_on_target_away: Math.floor(Math.random() * 5) + 1,
-                corners_home: Math.floor(Math.random() * 8),
-                corners_away: Math.floor(Math.random() * 8)
-              })
+        // Verificar se já existe análise para atualizar ou criar nova
+        if (oldAnalysis) {
+          const { error: analysisError } = await supabaseClient
+            .from('match_analysis')
+            .update(newAnalysis)
+            .eq('match_id', matchId)
+        } else {
+          const { error: analysisError } = await supabaseClient
+            .from('match_analysis')
+            .insert(newAnalysis)
+        }
 
-            if (metricsError) {
-              console.log('❌ Erro ao criar métricas:', metricsError)
-            }
+        // Verificar alertas após criar/atualizar a análise
+        await checkForAlerts(supabaseClient, matchId, matchData.home_team, matchData.away_team, newAnalysis, oldAnalysis)
+
+        // Criar métricas para o jogo se não existir
+        if (!existingMatch) {
+          const xgHome = Math.random() * 2.5
+          const xgAway = Math.random() * 2.5
+          
+          const { error: metricsError } = await supabaseClient
+            .from('match_metrics')
+            .insert({
+              match_id: matchId,
+              xg_home: xgHome,
+              xg_away: xgAway,
+              dangerous_attacks: Math.floor(Math.random() * 15) + 5,
+              possession_home: 45 + Math.random() * 20,
+              possession_away: 45 + Math.random() * 20,
+              shots_home: Math.floor(Math.random() * 10) + 2,
+              shots_away: Math.floor(Math.random() * 10) + 2,
+              shots_on_target_home: Math.floor(Math.random() * 5) + 1,
+              shots_on_target_away: Math.floor(Math.random() * 5) + 1,
+              corners_home: Math.floor(Math.random() * 8),
+              corners_away: Math.floor(Math.random() * 8)
+            })
+
+          if (metricsError) {
+            console.log('❌ Erro ao criar métricas:', metricsError)
           }
         }
       }
@@ -300,7 +426,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Buscar todos os jogos (ao vivo + programados) - apenas da API real
+    // Buscar todos os jogos (ao vivo + programados)
     const { data: updatedMatches, error: fetchError } = await supabaseClient
       .from('matches')
       .select(`
@@ -325,7 +451,6 @@ Deno.serve(async (req) => {
         matches: updatedMatches || [],
         meta: {
           api_matches: liveMatches.length,
-          demo_matches: 0,
           scheduled_matches: scheduledMatches.length,
           api_error: apiError,
           api_key_configured: !!apiKey,
@@ -349,7 +474,6 @@ Deno.serve(async (req) => {
         matches: [],
         meta: {
           api_matches: 0,
-          demo_matches: 0,
           scheduled_matches: 0,
           api_error: error.message,
           total: 0,
