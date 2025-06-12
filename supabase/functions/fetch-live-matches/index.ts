@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -29,48 +30,75 @@ Deno.serve(async (req) => {
     )
 
     console.log('🔄 Iniciando busca por jogos ao vivo...')
+    console.log('🕐 Timestamp atual:', new Date().toISOString())
 
     let apiMatches: FootballMatch[] = []
     let apiError = null
+    let apiResponse = null
 
-    // Tentar buscar da API Football-Data.org
-    try {
-      const apiKey = Deno.env.get('FOOTBALL_DATA_API_KEY')
-      
-      if (!apiKey) {
-        console.log('❌ Chave da API Football-Data não configurada')
-        apiError = 'API key not configured'
-      } else {
-        console.log('🌐 Buscando jogos da API Football-Data.org...')
+    // Verificar se a chave da API está configurada
+    const apiKey = Deno.env.get('FOOTBALL_DATA_API_KEY')
+    console.log('🔑 API Key configurada:', apiKey ? 'SIM' : 'NÃO')
+    console.log('🔑 Primeiros 10 caracteres da key:', apiKey ? apiKey.substring(0, 10) + '...' : 'N/A')
+
+    if (!apiKey) {
+      console.log('❌ Chave da API Football-Data não configurada')
+      apiError = 'API key not configured'
+    } else {
+      try {
+        console.log('🌐 Fazendo requisição para Football-Data.org...')
+        console.log('🌐 URL:', 'https://api.football-data.org/v4/matches?status=LIVE')
         
         const response = await fetch('https://api.football-data.org/v4/matches?status=LIVE', {
           headers: {
-            'X-Auth-Token': apiKey
+            'X-Auth-Token': apiKey,
+            'User-Agent': 'Packball-Analytics/1.0'
           }
         })
 
-        console.log(`📡 Resposta da API: ${response.status} ${response.statusText}`)
+        console.log(`📡 Status da resposta: ${response.status}`)
+        console.log(`📡 Status text: ${response.statusText}`)
+        console.log(`📡 Headers da resposta:`, Object.fromEntries(response.headers.entries()))
 
         if (!response.ok) {
           const errorText = await response.text()
-          console.log(`❌ Erro da API: ${errorText}`)
+          console.log(`❌ Erro da API (${response.status}): ${errorText}`)
           apiError = `API returned ${response.status}: ${errorText}`
+          apiResponse = { status: response.status, error: errorText }
         } else {
           const data = await response.json()
-          apiMatches = data.matches || []
-          console.log(`✅ API retornou ${apiMatches.length} jogos ao vivo`)
+          console.log('📊 Estrutura da resposta da API:', JSON.stringify(data, null, 2))
           
-          // Log dos jogos encontrados
+          apiMatches = data.matches || []
+          console.log(`✅ API retornou ${apiMatches.length} jogos`)
+          
           if (apiMatches.length > 0) {
-            apiMatches.forEach(match => {
-              console.log(`⚽ ${match.homeTeam.name} vs ${match.awayTeam.name} (${match.competition.name})`)
+            console.log('⚽ Jogos encontrados:')
+            apiMatches.forEach((match, index) => {
+              console.log(`  ${index + 1}. ${match.homeTeam.name} vs ${match.awayTeam.name}`)
+              console.log(`     Liga: ${match.competition.name}`)
+              console.log(`     Status: ${match.status}`)
+              console.log(`     Minuto: ${match.minute}`)
+              console.log(`     Placar: ${match.score.fullTime.home} - ${match.score.fullTime.away}`)
+              console.log(`     Data: ${match.utcDate}`)
+              console.log('     ---')
             })
+          } else {
+            console.log('📝 Nenhum jogo ao vivo encontrado na API')
+          }
+          
+          apiResponse = { 
+            status: response.status, 
+            matchCount: apiMatches.length,
+            data: data 
           }
         }
+      } catch (error) {
+        console.log('❌ Erro ao fazer requisição:', error.message)
+        console.log('❌ Stack trace:', error.stack)
+        apiError = `Request failed: ${error.message}`
+        apiResponse = { error: error.message, stack: error.stack }
       }
-    } catch (error) {
-      console.log('❌ Erro ao buscar da API:', error)
-      apiError = error.message
     }
 
     // Processar jogos da API se houver
@@ -91,6 +119,8 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString()
         }
 
+        console.log(`💾 Salvando jogo: ${matchData.home_team} vs ${matchData.away_team}`)
+
         // Verificar se o jogo já existe
         const { data: existingMatch } = await supabaseClient
           .from('matches')
@@ -101,19 +131,25 @@ Deno.serve(async (req) => {
           .single()
 
         if (existingMatch) {
+          console.log(`🔄 Atualizando jogo existente: ${matchData.home_team} vs ${matchData.away_team}`)
           await supabaseClient
             .from('matches')
             .update(matchData)
             .eq('id', existingMatch.id)
         } else {
-          // ... keep existing code (insert new match with analysis and metrics)
-          const { data: newMatch } = await supabaseClient
+          console.log(`➕ Criando novo jogo: ${matchData.home_team} vs ${matchData.away_team}`)
+          
+          const { data: newMatch, error: insertError } = await supabaseClient
             .from('matches')
             .insert(matchData)
             .select('id')
             .single()
 
-          if (newMatch) {
+          if (insertError) {
+            console.log('❌ Erro ao inserir jogo:', insertError)
+          } else if (newMatch) {
+            console.log(`✅ Jogo criado com ID: ${newMatch.id}`)
+            
             const totalGoals = matchData.total_goals
             const minute = matchData.minute
 
@@ -128,6 +164,7 @@ Deno.serve(async (req) => {
             if (evPercentage > 5) recommendation = 'enter'
             if (evPercentage < -5) recommendation = 'avoid'
 
+            console.log(`📊 Criando análise para jogo ${newMatch.id}`)
             await supabaseClient
               .from('match_analysis')
               .insert({
@@ -144,6 +181,7 @@ Deno.serve(async (req) => {
             const xgHome = Math.random() * 2.5
             const xgAway = Math.random() * 2.5
             
+            console.log(`📈 Criando métricas para jogo ${newMatch.id}`)
             await supabaseClient
               .from('match_metrics')
               .insert({
@@ -164,15 +202,12 @@ Deno.serve(async (req) => {
           }
         }
       }
-    }
-
-    // Se não há jogos da API, manter os dados de demonstração existentes
-    if (apiMatches.length === 0) {
+    } else {
       console.log('📝 Nenhum jogo da API, mantendo dados de demonstração existentes')
     }
 
     // Buscar todos os jogos ao vivo (API + demonstração)
-    const { data: updatedMatches } = await supabaseClient
+    const { data: updatedMatches, error: fetchError } = await supabaseClient
       .from('matches')
       .select(`
         *,
@@ -181,6 +216,10 @@ Deno.serve(async (req) => {
       `)
       .eq('status', 'live')
       .order('minute', { ascending: false })
+
+    if (fetchError) {
+      console.log('❌ Erro ao buscar jogos do banco:', fetchError)
+    }
 
     const apiMatchesCount = updatedMatches?.filter(match => 
       !['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
@@ -191,6 +230,7 @@ Deno.serve(async (req) => {
     ).length || 0
 
     console.log(`📊 Retornando: ${apiMatchesCount} jogos da API + ${demoMatchesCount} de demonstração`)
+    console.log('📊 Total de jogos no banco:', updatedMatches?.length || 0)
 
     return new Response(
       JSON.stringify({ 
@@ -199,7 +239,10 @@ Deno.serve(async (req) => {
           api_matches: apiMatchesCount,
           demo_matches: demoMatchesCount,
           api_error: apiError,
-          total: updatedMatches?.length || 0
+          api_response: apiResponse,
+          api_key_configured: !!apiKey,
+          total: updatedMatches?.length || 0,
+          timestamp: new Date().toISOString()
         }
       }),
       { 
@@ -210,11 +253,21 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Erro geral na função:', error)
+    console.error('❌ Stack trace completo:', error.stack)
+    
     return new Response(
       JSON.stringify({ 
         error: 'Erro interno do servidor', 
         details: error.message,
-        matches: []
+        stack: error.stack,
+        matches: [],
+        meta: {
+          api_matches: 0,
+          demo_matches: 0,
+          api_error: error.message,
+          total: 0,
+          timestamp: new Date().toISOString()
+        }
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
