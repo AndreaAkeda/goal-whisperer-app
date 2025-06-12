@@ -9,7 +9,219 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          id: string
+          is_read: boolean | null
+          match_id: string | null
+          message: string
+          priority: string
+          title: string
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          match_id?: string | null
+          message: string
+          priority?: string
+          title: string
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          match_id?: string | null
+          message?: string
+          priority?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_analysis: {
+        Row: {
+          away_form_score: number | null
+          confidence_level: string
+          created_at: string
+          current_odds: number
+          ev_percentage: number
+          head_to_head_score: number | null
+          home_form_score: number | null
+          id: string
+          injury_impact_score: number | null
+          match_id: string | null
+          rating: number | null
+          recommendation: string
+          recommended_odds: number
+          under_45_probability: number
+          updated_at: string
+          weather_condition: string | null
+        }
+        Insert: {
+          away_form_score?: number | null
+          confidence_level?: string
+          created_at?: string
+          current_odds: number
+          ev_percentage: number
+          head_to_head_score?: number | null
+          home_form_score?: number | null
+          id?: string
+          injury_impact_score?: number | null
+          match_id?: string | null
+          rating?: number | null
+          recommendation?: string
+          recommended_odds: number
+          under_45_probability: number
+          updated_at?: string
+          weather_condition?: string | null
+        }
+        Update: {
+          away_form_score?: number | null
+          confidence_level?: string
+          created_at?: string
+          current_odds?: number
+          ev_percentage?: number
+          head_to_head_score?: number | null
+          home_form_score?: number | null
+          id?: string
+          injury_impact_score?: number | null
+          match_id?: string | null
+          rating?: number | null
+          recommendation?: string
+          recommended_odds?: number
+          under_45_probability?: number
+          updated_at?: string
+          weather_condition?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_analysis_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_metrics: {
+        Row: {
+          corners_away: number | null
+          corners_home: number | null
+          dangerous_attacks: number | null
+          id: string
+          match_id: string | null
+          possession_away: number | null
+          possession_home: number | null
+          shots_away: number | null
+          shots_home: number | null
+          shots_on_target_away: number | null
+          shots_on_target_home: number | null
+          updated_at: string
+          xg_away: number | null
+          xg_home: number | null
+          xg_total: number | null
+        }
+        Insert: {
+          corners_away?: number | null
+          corners_home?: number | null
+          dangerous_attacks?: number | null
+          id?: string
+          match_id?: string | null
+          possession_away?: number | null
+          possession_home?: number | null
+          shots_away?: number | null
+          shots_home?: number | null
+          shots_on_target_away?: number | null
+          shots_on_target_home?: number | null
+          updated_at?: string
+          xg_away?: number | null
+          xg_home?: number | null
+          xg_total?: number | null
+        }
+        Update: {
+          corners_away?: number | null
+          corners_home?: number | null
+          dangerous_attacks?: number | null
+          id?: string
+          match_id?: string | null
+          possession_away?: number | null
+          possession_home?: number | null
+          shots_away?: number | null
+          shots_home?: number | null
+          shots_on_target_away?: number | null
+          shots_on_target_home?: number | null
+          updated_at?: string
+          xg_away?: number | null
+          xg_home?: number | null
+          xg_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_metrics_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matches: {
+        Row: {
+          away_team: string
+          created_at: string
+          home_team: string
+          id: string
+          kickoff_time: string
+          league: string
+          minute: number | null
+          score_away: number | null
+          score_home: number | null
+          status: string
+          total_goals: number | null
+          updated_at: string
+        }
+        Insert: {
+          away_team: string
+          created_at?: string
+          home_team: string
+          id?: string
+          kickoff_time: string
+          league: string
+          minute?: number | null
+          score_away?: number | null
+          score_home?: number | null
+          status?: string
+          total_goals?: number | null
+          updated_at?: string
+        }
+        Update: {
+          away_team?: string
+          created_at?: string
+          home_team?: string
+          id?: string
+          kickoff_time?: string
+          league?: string
+          minute?: number | null
+          score_away?: number | null
+          score_home?: number | null
+          status?: string
+          total_goals?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

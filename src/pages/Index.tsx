@@ -15,25 +15,22 @@ import {
   Calculator,
   Zap
 } from 'lucide-react';
-import { PreLiveAnalysis } from '@/components/PreLiveAnalysis';
-import { LiveMonitoring } from '@/components/LiveMonitoring';
+import { LiveMatches } from '@/components/LiveMatches';
+import { PreLiveMatches } from '@/components/PreLiveMatches';
 import { EVCalculator } from '@/components/EVCalculator';
-import { AlertsPanel } from '@/components/AlertsPanel';
+import { AlertsList } from '@/components/AlertsList';
+import { useUnreadAlerts } from '@/hooks/useAlerts';
+import { useLiveMatches } from '@/hooks/useMatches';
 
 const Index = () => {
-  const [notifications, setNotifications] = useState(0);
   const [totalProfit, setTotalProfit] = useState(2847.50);
-  const [todayPredictions, setTodayPredictions] = useState(12);
-  const [activeMatches, setActiveMatches] = useState(8);
+  
+  const { data: unreadAlerts = [] } = useUnreadAlerts();
+  const { data: liveMatches = [] } = useLiveMatches();
 
-  useEffect(() => {
-    // Simula atualizações em tempo real
-    const interval = setInterval(() => {
-      setNotifications(prev => prev < 5 ? prev + 1 : prev);
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
+  // Calcular estatísticas das análises
+  const todayPredictions = liveMatches.length + 7; // Simulado
+  const activeMatches = liveMatches.length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 dark">
@@ -53,9 +50,9 @@ const Index = () => {
             <Button variant="outline" size="sm" className="relative">
               <Bell className="h-4 w-4 mr-2" />
               Alertas
-              {notifications > 0 && (
+              {unreadAlerts.length > 0 && (
                 <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center bg-destructive">
-                  {notifications}
+                  {unreadAlerts.length}
                 </Badge>
               )}
             </Button>
@@ -145,15 +142,20 @@ const Index = () => {
             <TabsTrigger value="alerts" className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
               <span className="hidden sm:inline">Alertas</span>
+              {unreadAlerts.length > 0 && (
+                <Badge className="ml-1 h-4 w-4 p-0 text-xs">
+                  {unreadAlerts.length}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="live" className="space-y-6">
-            <LiveMonitoring />
+            <LiveMatches />
           </TabsContent>
 
           <TabsContent value="prelive" className="space-y-6">
-            <PreLiveAnalysis />
+            <PreLiveMatches />
           </TabsContent>
 
           <TabsContent value="calculator" className="space-y-6">
@@ -161,7 +163,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="alerts" className="space-y-6">
-            <AlertsPanel />
+            <AlertsList />
           </TabsContent>
         </Tabs>
       </div>
