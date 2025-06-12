@@ -46,7 +46,6 @@ Deno.serve(async (req) => {
 
     let apiMatches: ApiFootballMatch[] = []
     let apiError = null
-    let apiResponse = null
 
     // Verificar se a chave da API está configurada
     const apiKey = Deno.env.get('API_FOOTBALL_KEY')
@@ -104,7 +103,6 @@ Deno.serve(async (req) => {
           continue
         }
 
-        // Não incluir total_goals pois é uma coluna gerada
         const matchData = {
           home_team: match.teams.home.name,
           away_team: match.teams.away.name,
@@ -218,7 +216,91 @@ Deno.serve(async (req) => {
       console.log('📝 Nenhum jogo da API, mantendo dados de demonstração existentes')
     }
 
-    // Buscar todos os jogos ao vivo (API + demonstração)
+    // Criar alguns jogos programados para a demonstração da aba Pré-Live
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    tomorrow.setHours(20, 0, 0, 0)
+
+    const scheduledGames = [
+      {
+        home_team: 'Real Madrid',
+        away_team: 'Barcelona',
+        league: 'La Liga (Espanha)',
+        status: 'scheduled',
+        kickoff_time: tomorrow.toISOString(),
+        minute: 0,
+        score_home: 0,
+        score_away: 0
+      },
+      {
+        home_team: 'Manchester City',
+        away_team: 'Arsenal',
+        league: 'Premier League (Inglaterra)',
+        status: 'scheduled',
+        kickoff_time: new Date(tomorrow.getTime() + 2 * 60 * 60 * 1000).toISOString(),
+        minute: 0,
+        score_home: 0,
+        score_away: 0
+      },
+      {
+        home_team: 'PSG',
+        away_team: 'Olympique de Marseille',
+        league: 'Ligue 1 (França)',
+        status: 'scheduled',
+        kickoff_time: new Date(tomorrow.getTime() + 4 * 60 * 60 * 1000).toISOString(),
+        minute: 0,
+        score_home: 0,
+        score_away: 0
+      }
+    ]
+
+    // Verificar e inserir jogos programados se não existirem
+    for (const game of scheduledGames) {
+      const { data: existingGame } = await supabaseClient
+        .from('matches')
+        .select('id')
+        .eq('home_team', game.home_team)
+        .eq('away_team', game.away_team)
+        .eq('status', 'scheduled')
+        .single()
+
+      if (!existingGame) {
+        console.log(`➕ Criando jogo programado: ${game.home_team} vs ${game.away_team}`)
+        
+        const { data: newGame, error: insertError } = await supabaseClient
+          .from('matches')
+          .insert(game)
+          .select('id')
+          .single()
+
+        if (newGame && !insertError) {
+          // Criar análise para o jogo programado
+          const under45Probability = 70 + Math.random() * 25
+          const currentOdds = 1.5 + Math.random() * 0.8
+          const recommendedOdds = currentOdds * (0.9 + Math.random() * 0.2)
+          const evPercentage = ((recommendedOdds / currentOdds - 1) * 100)
+
+          let recommendation = 'monitor'
+          if (evPercentage > 5) recommendation = 'enter'
+          if (evPercentage < -5) recommendation = 'avoid'
+
+          await supabaseClient
+            .from('match_analysis')
+            .insert({
+              match_id: newGame.id,
+              under_45_probability: under45Probability,
+              current_odds: currentOdds,
+              recommended_odds: recommendedOdds,
+              ev_percentage: evPercentage,
+              recommendation: recommendation,
+              confidence_level: under45Probability > 80 ? 'high' : 'medium',
+              rating: Math.floor(under45Probability * 0.9 + Math.random() * 10)
+            })
+        }
+      }
+    }
+
+    // Buscar todos os jogos (ao vivo + programados)
     const { data: updatedMatches, error: fetchError } = await supabaseClient
       .from('matches')
       .select(`
@@ -226,22 +308,24 @@ Deno.serve(async (req) => {
         match_analysis(*),
         match_metrics(*)
       `)
-      .eq('status', 'live')
-      .order('minute', { ascending: false })
+      .order('kickoff_time', { ascending: true })
 
     if (fetchError) {
       console.log('❌ Erro ao buscar jogos do banco:', fetchError)
     }
 
-    const apiMatchesCount = updatedMatches?.filter(match => 
+    const liveMatches = updatedMatches?.filter(match => match.status === 'live') || []
+    const scheduledMatches = updatedMatches?.filter(match => match.status === 'scheduled') || []
+
+    const apiMatchesCount = liveMatches.filter(match => 
       !['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
-    ).length || 0
+    ).length
 
-    const demoMatchesCount = updatedMatches?.filter(match => 
+    const demoMatchesCount = liveMatches.filter(match => 
       ['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
-    ).length || 0
+    ).length
 
-    console.log(`📊 Retornando: ${apiMatchesCount} jogos da API + ${demoMatchesCount} de demonstração`)
+    console.log(`📊 Retornando: ${apiMatchesCount} jogos ao vivo da API + ${demoMatchesCount} de demonstração + ${scheduledMatches.length} programados`)
     console.log('📊 Total de jogos no banco:', updatedMatches?.length || 0)
 
     return new Response(
@@ -250,6 +334,7 @@ Deno.serve(async (req) => {
         meta: {
           api_matches: apiMatchesCount,
           demo_matches: demoMatchesCount,
+          scheduled_matches: scheduledMatches.length,
           api_error: apiError,
           api_key_configured: !!apiKey,
           total: updatedMatches?.length || 0,
@@ -273,6 +358,7 @@ Deno.serve(async (req) => {
         meta: {
           api_matches: 0,
           demo_matches: 0,
+          scheduled_matches: 0,
           api_error: error.message,
           total: 0,
           timestamp: new Date().toISOString()

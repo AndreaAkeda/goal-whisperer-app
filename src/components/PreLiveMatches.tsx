@@ -77,7 +77,7 @@ const ScheduledMatchCard = ({ match }: { match: MatchWithAnalysis }) => {
           <>
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-3 bg-muted/50 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Expected Value</p>
+                <p className="text-xs text-muted-foreground mb-1">Valor Esperado</p>
                 <p className={`text-lg font-bold ${getEVColor(Number(analysis.ev_percentage))}`}>
                   {Number(analysis.ev_percentage) > 0 ? '+' : ''}{Number(analysis.ev_percentage).toFixed(1)}%
                 </p>
@@ -95,12 +95,12 @@ const ScheduledMatchCard = ({ match }: { match: MatchWithAnalysis }) => {
                 <p className="font-bold">{Number(analysis.current_odds).toFixed(2)}</p>
               </div>
               <div className="text-center p-2 bg-muted/30 rounded">
-                <p className="text-xs text-muted-foreground">Rating</p>
+                <p className="text-xs text-muted-foreground">Nota</p>
                 <p className="font-bold">{analysis.rating}/100</p>
               </div>
               <div className="text-center p-2 bg-muted/30 rounded">
                 <p className="text-xs text-muted-foreground">Conf.</p>
-                <p className="font-bold capitalize">{analysis.confidence_level}</p>
+                <p className="font-bold capitalize">{analysis.confidence_level === 'high' ? 'Alta' : analysis.confidence_level === 'medium' ? 'Média' : 'Baixa'}</p>
               </div>
             </div>
 
@@ -126,7 +126,11 @@ const ScheduledMatchCard = ({ match }: { match: MatchWithAnalysis }) => {
 export const PreLiveMatches = () => {
   const { data: matches = [], isLoading, error } = useMatches();
 
-  const scheduledMatches = matches.filter(match => match.status === 'scheduled');
+  // Filtrar jogos programados (não ao vivo)
+  const scheduledMatches = matches.filter(match => 
+    match.status === 'scheduled' || 
+    (match.status !== 'live' && new Date(match.kickoff_time) > new Date())
+  );
 
   if (error) {
     return (
