@@ -6,15 +6,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface FootballMatch {
-  id: number
-  homeTeam: { name: string }
-  awayTeam: { name: string }
-  score: { fullTime: { home: number | null, away: number | null } }
-  status: string
-  minute: number | null
-  competition: { name: string }
-  utcDate: string
+interface ApiFootballMatch {
+  fixture: {
+    id: number
+    status: {
+      short: string
+      elapsed: number | null
+    }
+    date: string
+  }
+  league: {
+    name: string
+    country: string
+  }
+  teams: {
+    home: { name: string }
+    away: { name: string }
+  }
+  goals: {
+    home: number | null
+    away: number | null
+  }
 }
 
 Deno.serve(async (req) => {
@@ -32,27 +44,27 @@ Deno.serve(async (req) => {
     console.log('🔄 Iniciando busca por jogos ao vivo...')
     console.log('🕐 Timestamp atual:', new Date().toISOString())
 
-    let apiMatches: FootballMatch[] = []
+    let apiMatches: ApiFootballMatch[] = []
     let apiError = null
     let apiResponse = null
 
     // Verificar se a chave da API está configurada
-    const apiKey = Deno.env.get('FOOTBALL_DATA_API_KEY')
-    console.log('🔑 API Key configurada:', apiKey ? 'SIM' : 'NÃO')
+    const apiKey = Deno.env.get('API_FOOTBALL_KEY')
+    console.log('🔑 API Football Key configurada:', apiKey ? 'SIM' : 'NÃO')
     console.log('🔑 Primeiros 10 caracteres da key:', apiKey ? apiKey.substring(0, 10) + '...' : 'N/A')
 
     if (!apiKey) {
-      console.log('❌ Chave da API Football-Data não configurada')
+      console.log('❌ Chave da API Football não configurada')
       apiError = 'API key not configured'
     } else {
       try {
-        console.log('🌐 Fazendo requisição para Football-Data.org...')
-        console.log('🌐 URL:', 'https://api.football-data.org/v4/matches?status=LIVE')
+        console.log('🌐 Fazendo requisição para API-Football.com...')
+        console.log('🌐 URL:', 'https://v3.football.api-sports.io/fixtures?live=all')
         
-        const response = await fetch('https://api.football-data.org/v4/matches?status=LIVE', {
+        const response = await fetch('https://v3.football.api-sports.io/fixtures?live=all', {
           headers: {
-            'X-Auth-Token': apiKey,
-            'User-Agent': 'Packball-Analytics/1.0'
+            'X-RapidAPI-Key': apiKey,
+            'X-RapidAPI-Host': 'v3.football.api-sports.io'
           }
         })
 
@@ -69,18 +81,18 @@ Deno.serve(async (req) => {
           const data = await response.json()
           console.log('📊 Estrutura da resposta da API:', JSON.stringify(data, null, 2))
           
-          apiMatches = data.matches || []
+          apiMatches = data.response || []
           console.log(`✅ API retornou ${apiMatches.length} jogos`)
           
           if (apiMatches.length > 0) {
             console.log('⚽ Jogos encontrados:')
             apiMatches.forEach((match, index) => {
-              console.log(`  ${index + 1}. ${match.homeTeam.name} vs ${match.awayTeam.name}`)
-              console.log(`     Liga: ${match.competition.name}`)
-              console.log(`     Status: ${match.status}`)
-              console.log(`     Minuto: ${match.minute}`)
-              console.log(`     Placar: ${match.score.fullTime.home} - ${match.score.fullTime.away}`)
-              console.log(`     Data: ${match.utcDate}`)
+              console.log(`  ${index + 1}. ${match.teams.home.name} vs ${match.teams.away.name}`)
+              console.log(`     Liga: ${match.league.name} (${match.league.country})`)
+              console.log(`     Status: ${match.fixture.status.short}`)
+              console.log(`     Minuto: ${match.fixture.status.elapsed}`)
+              console.log(`     Placar: ${match.goals.home} - ${match.goals.away}`)
+              console.log(`     Data: ${match.fixture.date}`)
               console.log('     ---')
             })
           } else {
@@ -106,16 +118,21 @@ Deno.serve(async (req) => {
       console.log(`🔄 Processando ${apiMatches.length} jogos da API...`)
       
       for (const match of apiMatches.slice(0, 10)) {
+        // Filtrar apenas jogos que estão realmente ao vivo
+        if (match.fixture.status.short !== '1H' && match.fixture.status.short !== '2H' && match.fixture.status.short !== 'HT') {
+          continue
+        }
+
         const matchData = {
-          home_team: match.homeTeam.name,
-          away_team: match.awayTeam.name,
-          league: match.competition.name,
+          home_team: match.teams.home.name,
+          away_team: match.teams.away.name,
+          league: `${match.league.name} (${match.league.country})`,
           status: 'live',
-          minute: match.minute || 0,
-          score_home: match.score.fullTime.home || 0,
-          score_away: match.score.fullTime.away || 0,
-          total_goals: (match.score.fullTime.home || 0) + (match.score.fullTime.away || 0),
-          kickoff_time: match.utcDate,
+          minute: match.fixture.status.elapsed || 0,
+          score_home: match.goals.home || 0,
+          score_away: match.goals.away || 0,
+          total_goals: (match.goals.home || 0) + (match.goals.away || 0),
+          kickoff_time: match.fixture.date,
           updated_at: new Date().toISOString()
         }
 
@@ -125,9 +142,9 @@ Deno.serve(async (req) => {
         const { data: existingMatch } = await supabaseClient
           .from('matches')
           .select('id')
-          .eq('home_team', match.homeTeam.name)
-          .eq('away_team', match.awayTeam.name)
-          .eq('kickoff_time', match.utcDate)
+          .eq('home_team', match.teams.home.name)
+          .eq('away_team', match.teams.away.name)
+          .eq('kickoff_time', match.fixture.date)
           .single()
 
         if (existingMatch) {
