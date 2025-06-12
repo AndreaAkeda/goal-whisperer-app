@@ -53,30 +53,20 @@ const getEVColor = (evPercentage: number) => {
   return 'text-warning';
 };
 
-const MatchCard = ({ match, isRealData }: { match: MatchWithAnalysis; isRealData: boolean }) => {
+const MatchCard = ({ match }: { match: MatchWithAnalysis }) => {
   const analysis = match.match_analysis?.[0];
   const metrics = match.match_metrics?.[0];
 
   return (
-    <Card className={`border-l-4 ${isRealData ? 'border-l-success' : 'border-l-warning'}`}>
+    <Card className="border-l-4 border-l-success">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {isRealData ? (
-              <Globe className="h-4 w-4 text-success" />
-            ) : (
-              <Activity className="h-4 w-4 text-warning" />
-            )}
-            <Badge variant="secondary" className={isRealData ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}>
+            <Globe className="h-4 w-4 text-success" />
+            <Badge variant="secondary" className="bg-success/10 text-success">
               {match.minute}'
             </Badge>
             <span className="text-sm text-muted-foreground">{match.league}</span>
-            {!isRealData && (
-              <Badge variant="outline" className="text-xs">
-                <Info className="h-3 w-3 mr-1" />
-                DEMO
-              </Badge>
-            )}
           </div>
           <div className="text-right">
             <div className="text-lg font-bold">
@@ -99,7 +89,7 @@ const MatchCard = ({ match, isRealData }: { match: MatchWithAnalysis; isRealData
           <>
             <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
               <div>
-                <p className="text-sm font-medium">Expected Value</p>
+                <p className="text-sm font-medium">Valor Esperado</p>
                 <p className={`text-xl font-bold ${getEVColor(Number(analysis.ev_percentage))}`}>
                   {Number(analysis.ev_percentage) > 0 ? '+' : ''}{Number(analysis.ev_percentage).toFixed(1)}%
                 </p>
@@ -116,7 +106,7 @@ const MatchCard = ({ match, isRealData }: { match: MatchWithAnalysis; isRealData
                 <p className="font-bold">{Number(analysis.current_odds).toFixed(2)}</p>
               </div>
               <div className="text-center p-2 bg-muted/30 rounded">
-                <p className="text-xs text-muted-foreground">Rating</p>
+                <p className="text-xs text-muted-foreground">Nota</p>
                 <p className="font-bold">{analysis.rating}/100</p>
               </div>
             </div>
@@ -148,18 +138,8 @@ const MatchCard = ({ match, isRealData }: { match: MatchWithAnalysis; isRealData
 export const RealTimeLiveMatches = () => {
   const { data: liveMatches = [], isLoading, error, isError, refreshMatches, isRefreshing } = useRealTimeMatches();
 
-  // Detectar se os dados são reais (da API) ou simulados
-  const hasRealData = liveMatches.some(match => 
-    !['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
-  );
-
-  const realMatches = liveMatches.filter(match => 
-    !['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
-  );
-
-  const simulatedMatches = liveMatches.filter(match => 
-    ['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
-  );
+  // Filtrar apenas jogos ao vivo
+  const realLiveMatches = liveMatches.filter(match => match.status === 'live');
 
   if (error) {
     return (
@@ -201,12 +181,12 @@ export const RealTimeLiveMatches = () => {
     );
   }
 
-  if (liveMatches.length === 0) {
+  if (realLiveMatches.length === 0) {
     return (
       <Card>
         <CardContent className="p-8 text-center">
           <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <CardTitle className="mb-2">Nenhum jogo encontrado</CardTitle>
+          <CardTitle className="mb-2">Nenhum jogo ao vivo</CardTitle>
           <p className="text-muted-foreground mb-4">
             Não há jogos ao vivo no momento. A API Football está conectada e funcionando.
           </p>
@@ -232,24 +212,11 @@ export const RealTimeLiveMatches = () => {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xl font-semibold flex items-center gap-2">
-            {hasRealData ? (
-              <>
-                <Globe className="h-5 w-5 text-success" />
-                Jogos ao Vivo (API Football)
-              </>
-            ) : (
-              <>
-                <Activity className="h-5 w-5 text-warning" />
-                Dados de Demonstração
-              </>
-            )}
+            <Globe className="h-5 w-5 text-success" />
+            Jogos ao Vivo
           </h3>
           <p className="text-sm text-muted-foreground">
-            {hasRealData ? (
-              <>Dados reais • {realMatches.length} jogo(s) da API • Atualização automática</>
-            ) : (
-              <>Simulação • {simulatedMatches.length} jogo(s) demo • API conectada, aguardando jogos</>
-            )}
+            {realLiveMatches.length} jogo(s) da API Football • Dados reais • Atualização automática
           </p>
         </div>
         <Button 
@@ -264,18 +231,18 @@ export const RealTimeLiveMatches = () => {
       </div>
 
       {/* Status da API */}
-      <Card className={`border-${hasRealData ? 'success' : 'info'}`}>
+      <Card className="border-success">
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
-            <Globe className={`h-5 w-5 ${hasRealData ? 'text-success' : 'text-info'}`} />
+            <Globe className="h-5 w-5 text-success" />
             <div>
               <p className="text-sm font-medium">
-                {hasRealData ? 'API Football conectada - Jogos reais encontrados!' : 'API Football conectada - Aguardando jogos ao vivo'}
+                API Football conectada - {realLiveMatches.length > 0 ? 'Jogos encontrados!' : 'Aguardando jogos ao vivo'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {hasRealData 
-                  ? `${realMatches.length} jogo(s) ao vivo da API Football`
-                  : 'A API está funcionando, mas não há jogos europeus ao vivo no momento.'
+                {realLiveMatches.length > 0 
+                  ? `${realLiveMatches.length} jogo(s) ao vivo da API Football`
+                  : 'A API está funcionando, mas não há jogos ao vivo no momento.'
                 }
               </p>
             </div>
@@ -283,35 +250,12 @@ export const RealTimeLiveMatches = () => {
         </CardContent>
       </Card>
 
-      {/* Dados Reais da API */}
-      {realMatches.length > 0 && (
-        <div>
-          <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Globe className="h-4 w-4 text-success" />
-            Jogos Reais da API Football ({realMatches.length})
-          </h4>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {realMatches.map((match) => (
-              <MatchCard key={match.id} match={match} isRealData={true} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Dados Simulados */}
-      {simulatedMatches.length > 0 && (
-        <div>
-          <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Activity className="h-4 w-4 text-warning" />
-            Dados de Demonstração ({simulatedMatches.length})
-          </h4>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {simulatedMatches.map((match) => (
-              <MatchCard key={match.id} match={match} isRealData={false} />
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Jogos ao vivo */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {realLiveMatches.map((match) => (
+          <MatchCard key={match.id} match={match} />
+        ))}
+      </div>
     </div>
   );
 };

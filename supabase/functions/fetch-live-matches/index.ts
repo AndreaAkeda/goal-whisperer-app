@@ -93,11 +93,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Processar jogos da API se houver
+    // Processar apenas jogos da API se houver
     if (apiMatches.length > 0) {
-      console.log(`🔄 Processando ${Math.min(apiMatches.length, 10)} jogos da API...`)
+      console.log(`🔄 Processando ${Math.min(apiMatches.length, 15)} jogos da API...`)
       
-      for (const match of apiMatches.slice(0, 10)) {
+      for (const match of apiMatches.slice(0, 15)) {
         // Filtrar apenas jogos que estão realmente ao vivo
         if (match.fixture.status.short !== '1H' && match.fixture.status.short !== '2H' && match.fixture.status.short !== 'HT') {
           continue
@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
         }
       }
     } else {
-      console.log('📝 Nenhum jogo da API, mantendo dados de demonstração existentes')
+      console.log('📝 Nenhum jogo da API encontrado')
     }
 
     // Criar alguns jogos programados para a demonstração da aba Pré-Live
@@ -300,7 +300,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Buscar todos os jogos (ao vivo + programados)
+    // Buscar todos os jogos (ao vivo + programados) - apenas da API real
     const { data: updatedMatches, error: fetchError } = await supabaseClient
       .from('matches')
       .select(`
@@ -317,23 +317,15 @@ Deno.serve(async (req) => {
     const liveMatches = updatedMatches?.filter(match => match.status === 'live') || []
     const scheduledMatches = updatedMatches?.filter(match => match.status === 'scheduled') || []
 
-    const apiMatchesCount = liveMatches.filter(match => 
-      !['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
-    ).length
-
-    const demoMatchesCount = liveMatches.filter(match => 
-      ['Brasileirão', 'Copa do Brasil', 'Libertadores'].includes(match.league)
-    ).length
-
-    console.log(`📊 Retornando: ${apiMatchesCount} jogos ao vivo da API + ${demoMatchesCount} de demonstração + ${scheduledMatches.length} programados`)
+    console.log(`📊 Retornando: ${liveMatches.length} jogos ao vivo + ${scheduledMatches.length} programados`)
     console.log('📊 Total de jogos no banco:', updatedMatches?.length || 0)
 
     return new Response(
       JSON.stringify({ 
         matches: updatedMatches || [],
         meta: {
-          api_matches: apiMatchesCount,
-          demo_matches: demoMatchesCount,
+          api_matches: liveMatches.length,
+          demo_matches: 0,
           scheduled_matches: scheduledMatches.length,
           api_error: apiError,
           api_key_configured: !!apiKey,
