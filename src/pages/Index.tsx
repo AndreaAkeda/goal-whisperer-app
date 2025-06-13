@@ -31,10 +31,10 @@ const Index = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent mb-4">
-            Under 4.5 Pro
+            FutDea Under 3,5 Pro
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Sistema avançado de análise para apostas Under 4.5 gols com dados em tempo real e alertas automáticos
+            Sistema avançado de análise para apostas Under 3.5 gols com dados em tempo real e alertas automáticos
           </p>
         </div>
 
@@ -103,7 +103,7 @@ const Index = () => {
                   Alertas de Oportunidade
                 </h4>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• EV positivo alto ({'>'}10%)</li>
+                  <li>• EV positivo alto (&gt;10%)</li>
                   <li>• Novas oportunidades de entrada</li>
                   <li>• Melhoria significativa no EV</li>
                   <li>• Alta probabilidade com EV positivo</li>
@@ -116,7 +116,7 @@ const Index = () => {
                   Alertas de Mudança
                 </h4>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Mudanças significativas de odds ({'>'}5%)</li>
+                  <li>• Mudanças significativas de odds (&gt;5%)</li>
                   <li>• Alterações na recomendação</li>
                   <li>• Mudanças na probabilidade</li>
                   <li>• Novos jogos detectados</li>

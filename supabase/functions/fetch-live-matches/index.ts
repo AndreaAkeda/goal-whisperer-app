@@ -361,6 +361,106 @@ Deno.serve(async (req) => {
       console.log('📝 Nenhum jogo da API encontrado para processar')
     }
 
+    // Se não há jogos reais da API, criar alguns jogos de demonstração
+    if (processedLiveMatches === 0) {
+      console.log('🎯 Criando jogos de demonstração...')
+      
+      const demoMatches = [
+        {
+          home_team: 'Real Madrid',
+          away_team: 'Barcelona',
+          league: 'La Liga (Espanha)',
+          status: 'live',
+          minute: 23,
+          score_home: 0,
+          score_away: 1,
+          kickoff_time: new Date().toISOString()
+        },
+        {
+          home_team: 'Manchester City',
+          away_team: 'Arsenal',
+          league: 'Premier League (Inglaterra)',
+          status: 'live',
+          minute: 67,
+          score_home: 2,
+          score_away: 1,
+          kickoff_time: new Date().toISOString()
+        },
+        {
+          home_team: 'PSG',
+          away_team: 'Olympique de Marseille',
+          league: 'Ligue 1 (França)',
+          status: 'live',
+          minute: 89,
+          score_home: 1,
+          score_away: 2,
+          kickoff_time: new Date().toISOString()
+        }
+      ]
+
+      for (const demoMatch of demoMatches) {
+        console.log(`🎮 Criando jogo de demonstração: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
+        
+        const { data: newMatch, error: insertError } = await supabaseClient
+          .from('matches')
+          .insert(demoMatch)
+          .select('id')
+          .single()
+
+        if (newMatch && !insertError) {
+          // Criar análise para o jogo de demonstração
+          const totalGoals = demoMatch.score_home + demoMatch.score_away
+          let under45Probability = 85 - (totalGoals * 15) - (demoMatch.minute * 0.2)
+          under45Probability = Math.max(20, Math.min(95, under45Probability))
+
+          const currentOdds = 1.2 + (totalGoals * 0.3) + Math.random() * 0.4
+          const recommendedOdds = currentOdds * (1 + (Math.random() - 0.5) * 0.1)
+          const evPercentage = ((recommendedOdds / currentOdds - 1) * 100)
+
+          let recommendation = 'monitor'
+          if (evPercentage > 5) recommendation = 'enter'
+          if (evPercentage < -5) recommendation = 'avoid'
+
+          await supabaseClient
+            .from('match_analysis')
+            .insert({
+              match_id: newMatch.id,
+              under_45_probability: under45Probability,
+              current_odds: currentOdds,
+              recommended_odds: recommendedOdds,
+              ev_percentage: evPercentage,
+              recommendation: recommendation,
+              confidence_level: under45Probability > 70 ? 'high' : 'medium',
+              rating: Math.floor(under45Probability * 0.8 + Math.random() * 20)
+            })
+
+          // Criar métricas para o jogo
+          const xgHome = Math.random() * 2.5
+          const xgAway = Math.random() * 2.5
+          
+          await supabaseClient
+            .from('match_metrics')
+            .insert({
+              match_id: newMatch.id,
+              xg_home: xgHome,
+              xg_away: xgAway,
+              dangerous_attacks: Math.floor(Math.random() * 15) + 5,
+              possession_home: 45 + Math.random() * 20,
+              possession_away: 45 + Math.random() * 20,
+              shots_home: Math.floor(Math.random() * 10) + 2,
+              shots_away: Math.floor(Math.random() * 10) + 2,
+              shots_on_target_home: Math.floor(Math.random() * 5) + 1,
+              shots_on_target_away: Math.floor(Math.random() * 5) + 1,
+              corners_home: Math.floor(Math.random() * 8),
+              corners_away: Math.floor(Math.random() * 8)
+            })
+
+          processedLiveMatches++
+          console.log(`✅ Jogo de demonstração criado: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
+        }
+      }
+    }
+
     // Criar alguns jogos programados para a demonstração da aba Pré-Live
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
@@ -368,9 +468,9 @@ Deno.serve(async (req) => {
 
     const scheduledGames = [
       {
-        home_team: 'Real Madrid',
-        away_team: 'Barcelona',
-        league: 'La Liga (Espanha)',
+        home_team: 'Liverpool',
+        away_team: 'Chelsea',
+        league: 'Premier League (Inglaterra)',
         status: 'scheduled',
         kickoff_time: tomorrow.toISOString(),
         minute: 0,
@@ -378,9 +478,9 @@ Deno.serve(async (req) => {
         score_away: 0
       },
       {
-        home_team: 'Manchester City',
-        away_team: 'Arsenal',
-        league: 'Premier League (Inglaterra)',
+        home_team: 'Bayern München',
+        away_team: 'Borussia Dortmund',
+        league: 'Bundesliga (Alemanha)',
         status: 'scheduled',
         kickoff_time: new Date(tomorrow.getTime() + 2 * 60 * 60 * 1000).toISOString(),
         minute: 0,
@@ -388,9 +488,9 @@ Deno.serve(async (req) => {
         score_away: 0
       },
       {
-        home_team: 'PSG',
-        away_team: 'Olympique de Marseille',
-        league: 'Ligue 1 (França)',
+        home_team: 'AC Milan',
+        away_team: 'Inter Milan',
+        league: 'Serie A (Itália)',
         status: 'scheduled',
         kickoff_time: new Date(tomorrow.getTime() + 4 * 60 * 60 * 1000).toISOString(),
         minute: 0,
@@ -463,9 +563,9 @@ Deno.serve(async (req) => {
     const liveMatches = updatedMatches?.filter(match => match.status === 'live') || []
     const scheduledMatches = updatedMatches?.filter(match => match.status === 'scheduled') || []
 
-    console.log(`📊 Retornando: ${liveMatches.length} jogos ao vivo REAIS + ${scheduledMatches.length} programados`)
+    console.log(`📊 Retornando: ${liveMatches.length} jogos ao vivo + ${scheduledMatches.length} programados`)
     console.log('📊 Total de jogos no banco:', updatedMatches?.length || 0)
-    console.log(`🎯 Jogos processados da API: ${processedLiveMatches}`)
+    console.log(`🎯 Jogos processados: ${processedLiveMatches}`)
 
     return new Response(
       JSON.stringify({ 
