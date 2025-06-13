@@ -163,10 +163,12 @@ Deno.serve(async (req) => {
     let apiMatches: ApiFootballMatch[] = []
     let apiError = null
     let processedLiveMatches = 0
+    let apiResponseDetails = null
 
     // Verificar se a chave da API está configurada
     const apiKey = Deno.env.get('API_FOOTBALL_KEY')
     console.log('🔑 API Football Key configurada:', apiKey ? 'SIM' : 'NÃO')
+    console.log('🔑 Primeiros 10 caracteres da chave:', apiKey ? apiKey.substring(0, 10) + '...' : 'N/A')
 
     if (!apiKey) {
       console.log('❌ Chave da API Football não configurada')
@@ -184,6 +186,7 @@ Deno.serve(async (req) => {
         })
 
         console.log(`📡 Status da resposta: ${response.status}`)
+        console.log(`📡 Headers da resposta:`, Object.fromEntries(response.headers.entries()))
 
         if (!response.ok) {
           const errorText = await response.text()
@@ -191,8 +194,33 @@ Deno.serve(async (req) => {
           apiError = `API returned ${response.status}: ${errorText}`
         } else {
           const data = await response.json()
+          
+          // Log detalhado da resposta da API
+          console.log('📊 Resposta completa da API:', JSON.stringify(data, null, 2))
+          console.log('📊 Estrutura da resposta:', {
+            hasResponse: !!data.response,
+            responseType: typeof data.response,
+            responseLength: Array.isArray(data.response) ? data.response.length : 'não é array',
+            hasResults: !!data.results,
+            results: data.results,
+            hasPaging: !!data.paging,
+            paging: data.paging,
+            hasParameters: !!data.parameters,
+            parameters: data.parameters,
+            hasErrors: !!data.errors,
+            errors: data.errors
+          })
+          
           apiMatches = data.response || []
+          apiResponseDetails = {
+            results: data.results,
+            paging: data.paging,
+            parameters: data.parameters,
+            errors: data.errors
+          }
+          
           console.log(`✅ API retornou ${apiMatches.length} jogos`)
+          console.log(`📊 Resultados reportados pela API: ${data.results}`)
           
           if (apiMatches.length > 0) {
             console.log('⚽ Jogos ao vivo encontrados:')
@@ -201,13 +229,20 @@ Deno.serve(async (req) => {
               console.log(`     Liga: ${match.league.name} (${match.league.country})`)
               console.log(`     Status: ${match.fixture.status.short}, Minuto: ${match.fixture.status.elapsed}`)
               console.log(`     Placar: ${match.goals.home} - ${match.goals.away}`)
+              console.log(`     ID: ${match.fixture.id}`)
             })
           } else {
             console.log('📝 Nenhum jogo ao vivo encontrado na API')
+            if (data.results === 0) {
+              console.log('📝 API confirmou que não há jogos ao vivo no momento (results: 0)')
+            } else {
+              console.log('⚠️ API pode ter retornado dados vazios mesmo com jogos acontecendo')
+            }
           }
         }
       } catch (error) {
         console.log('❌ Erro ao fazer requisição:', error.message)
+        console.log('❌ Stack trace:', error.stack)
         apiError = `Request failed: ${error.message}`
       }
     }
@@ -220,10 +255,14 @@ Deno.serve(async (req) => {
         // Status que indicam jogo ao vivo
         const liveStatuses = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE']
         
+        console.log(`🔍 Verificando status do jogo ${match.teams.home.name} vs ${match.teams.away.name}: ${match.fixture.status.short}`)
+        
         if (!liveStatuses.includes(match.fixture.status.short)) {
-          console.log(`⏭️ Pulando jogo ${match.teams.home.name} vs ${match.teams.away.name} - Status: ${match.fixture.status.short}`)
+          console.log(`⏭️ Pulando jogo ${match.teams.home.name} vs ${match.teams.away.name} - Status: ${match.fixture.status.short} (não está ao vivo)`)
           continue
         }
+
+        const totalGoals = (match.goals.home || 0) + (match.goals.away || 0)
 
         const matchData = {
           external_id: match.fixture.id.toString(),
@@ -234,6 +273,7 @@ Deno.serve(async (req) => {
           minute: match.fixture.status.elapsed || 0,
           score_home: match.goals.home || 0,
           score_away: match.goals.away || 0,
+          total_goals: totalGoals,
           kickoff_time: match.fixture.date,
           updated_at: new Date().toISOString()
         }
@@ -290,7 +330,6 @@ Deno.serve(async (req) => {
         }
 
         // Criar análise para o jogo
-        const totalGoals = (match.goals.home || 0) + (match.goals.away || 0)
         const minute = match.fixture.status.elapsed || 0
 
         let under45Probability = 85 - (totalGoals * 15) - (minute * 0.2)
@@ -396,6 +435,11 @@ Deno.serve(async (req) => {
 
     if (liveMatches.length === 0) {
       console.log('📭 Nenhum jogo ao vivo disponível no momento')
+      if (apiResponseDetails?.results === 0) {
+        console.log('✅ Confirmado pela API que não há jogos ao vivo (results: 0)')
+      } else {
+        console.log('⚠️ API pode não estar retornando jogos mesmo com jogos acontecendo')
+      }
     }
 
     return new Response(
@@ -409,7 +453,8 @@ Deno.serve(async (req) => {
           total: allMatches?.length || 0,
           processed_live_matches: processedLiveMatches,
           timestamp: new Date().toISOString(),
-          demo_mode: false
+          demo_mode: false,
+          api_response_details: apiResponseDetails
         }
       }),
       { 
