@@ -149,6 +149,7 @@ Deno.serve(async (req) => {
 
     let apiMatches: ApiFootballMatch[] = []
     let apiError = null
+    let processedLiveMatches = 0
 
     // Verificar se a chave da API está configurada
     const apiKey = Deno.env.get('API_FOOTBALL_KEY')
@@ -199,15 +200,15 @@ Deno.serve(async (req) => {
     }
 
     // Processar jogos da API que estão ao vivo
-    let processedLiveMatches = 0
     if (apiMatches.length > 0) {
       console.log(`🔄 Processando todos os ${apiMatches.length} jogos da API...`)
       
       for (const match of apiMatches) {
-        // Status que indicam jogo ao vivo
-        const liveStatuses = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'SUSP', 'INT']
+        // Status que indicam jogo ao vivo - expandindo a lista
+        const liveStatuses = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE']
         
         if (!liveStatuses.includes(match.fixture.status.short)) {
+          console.log(`⏭️ Pulando jogo ${match.teams.home.name} vs ${match.teams.away.name} - Status: ${match.fixture.status.short}`)
           continue
         }
 
@@ -358,9 +359,14 @@ Deno.serve(async (req) => {
 
     console.log(`🎯 Processados ${processedLiveMatches} jogos ao vivo da API`)
 
-    // APENAS criar jogos de demonstração se NÃO há jogos reais ao vivo
-    if (processedLiveMatches === 0) {
-      console.log('🎯 Nenhum jogo ao vivo real encontrado. Criando jogos de demonstração...')
+    // APENAS criar jogos de demonstração se NÃO há jogos reais ao vivo E não há jogos live no banco
+    const { data: existingLiveMatches } = await supabaseClient
+      .from('matches')
+      .select('id')
+      .eq('status', 'live')
+
+    if (processedLiveMatches === 0 && (!existingLiveMatches || existingLiveMatches.length === 0)) {
+      console.log('🎯 Nenhum jogo ao vivo encontrado. Criando 3 jogos de demonstração...')
       
       const demoMatches = [
         {
@@ -468,81 +474,11 @@ Deno.serve(async (req) => {
             console.log(`✅ Jogo demo criado: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
           }
         } else {
-          processedLiveMatches++
+          console.log(`⏭️ Jogo demo já existe: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
         }
       }
-    }
-
-    // Criar alguns jogos programados para a aba Pré-Live
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    tomorrow.setHours(20, 0, 0, 0)
-
-    const scheduledGames = [
-      {
-        external_id: 'scheduled_1',
-        home_team: 'Liverpool',
-        away_team: 'Chelsea',
-        league: 'Premier League (Inglaterra)',
-        status: 'scheduled',
-        kickoff_time: tomorrow.toISOString(),
-        minute: 0,
-        score_home: 0,
-        score_away: 0
-      },
-      {
-        external_id: 'scheduled_2',
-        home_team: 'Bayern München',
-        away_team: 'Borussia Dortmund',
-        league: 'Bundesliga (Alemanha)',
-        status: 'scheduled',
-        kickoff_time: new Date(tomorrow.getTime() + 2 * 60 * 60 * 1000).toISOString(),
-        minute: 0,
-        score_home: 0,
-        score_away: 0
-      }
-    ]
-
-    // Verificar e inserir jogos programados se não existirem
-    for (const game of scheduledGames) {
-      const { data: existingGame } = await supabaseClient
-        .from('matches')
-        .select('id')
-        .eq('external_id', game.external_id)
-        .single()
-
-      if (!existingGame) {
-        const { data: newGame, error: insertError } = await supabaseClient
-          .from('matches')
-          .insert(game)
-          .select('id')
-          .single()
-
-        if (newGame && !insertError) {
-          // Criar análise para o jogo programado
-          const under45Probability = 70 + Math.random() * 25
-          const currentOdds = 1.5 + Math.random() * 0.8
-          const recommendedOdds = currentOdds * (0.9 + Math.random() * 0.2)
-          const evPercentage = ((recommendedOdds / currentOdds - 1) * 100)
-
-          let recommendation = 'monitor'
-          if (evPercentage > 5) recommendation = 'enter'
-          if (evPercentage < -5) recommendation = 'avoid'
-
-          await supabaseClient
-            .from('match_analysis')
-            .insert({
-              match_id: newGame.id,
-              under_45_probability: under45Probability,
-              current_odds: currentOdds,
-              recommended_odds: recommendedOdds,
-              ev_percentage: evPercentage,
-              recommendation: recommendation,
-              confidence_level: under45Probability > 80 ? 'high' : 'medium',
-              rating: Math.floor(under45Probability * 0.9 + Math.random() * 10)
-            })
-        }
-      }
+    } else {
+      console.log(`⏭️ Não criando jogos demo - Processados: ${processedLiveMatches}, Existentes: ${existingLiveMatches?.length || 0}`)
     }
 
     // Buscar todos os jogos (ao vivo e programados)

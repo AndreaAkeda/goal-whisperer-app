@@ -181,6 +181,7 @@ export type Database = {
         Row: {
           away_team: string
           created_at: string
+          external_id: string | null
           home_team: string
           id: string
           kickoff_time: string
@@ -195,6 +196,7 @@ export type Database = {
         Insert: {
           away_team: string
           created_at?: string
+          external_id?: string | null
           home_team: string
           id?: string
           kickoff_time: string
@@ -209,6 +211,7 @@ export type Database = {
         Update: {
           away_team?: string
           created_at?: string
+          external_id?: string | null
           home_team?: string
           id?: string
           kickoff_time?: string
