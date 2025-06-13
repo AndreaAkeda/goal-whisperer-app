@@ -12,13 +12,15 @@ import {
   Target,
   TrendingUp,
   Clock,
-  Zap
+  Zap,
+  Search
 } from 'lucide-react';
 import { RealTimeLiveMatches } from '@/components/RealTimeLiveMatches';
 import { PreLiveMatches } from '@/components/PreLiveMatches';
 import { EVCalculator } from '@/components/EVCalculator';
 import { AlertsList } from '@/components/AlertsList';
 import { AlertsBanner } from '@/components/AlertsBanner';
+import { ManualMatchSearch } from '@/components/ManualMatchSearch';
 import { useUnreadAlerts } from '@/hooks/useAlerts';
 
 const Index = () => {
@@ -43,10 +45,14 @@ const Index = () => {
 
         {/* Navigation Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-8">
+          <TabsList className="grid w-full grid-cols-5 mb-8">
             <TabsTrigger value="live" className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
               Ao Vivo
+            </TabsTrigger>
+            <TabsTrigger value="search" className="flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              Buscar
             </TabsTrigger>
             <TabsTrigger value="pre-live" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
@@ -69,6 +75,10 @@ const Index = () => {
 
           <TabsContent value="live" className="space-y-6">
             <RealTimeLiveMatches />
+          </TabsContent>
+
+          <TabsContent value="search" className="space-y-6">
+            <ManualMatchSearch />
           </TabsContent>
 
           <TabsContent value="pre-live" className="space-y-6">
