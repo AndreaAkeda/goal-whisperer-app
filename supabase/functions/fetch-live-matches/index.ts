@@ -359,14 +359,17 @@ Deno.serve(async (req) => {
 
     console.log(`🎯 Processados ${processedLiveMatches} jogos ao vivo da API`)
 
-    // APENAS criar jogos de demonstração se NÃO há jogos reais ao vivo E não há jogos live no banco
+    // Verificar jogos existentes no banco
     const { data: existingLiveMatches } = await supabaseClient
       .from('matches')
       .select('id')
       .eq('status', 'live')
 
+    console.log(`📊 Jogos "live" existentes no banco: ${existingLiveMatches?.length || 0}`)
+
+    // Criar jogos de demonstração apenas se NÃO há jogos ao vivo
     if (processedLiveMatches === 0 && (!existingLiveMatches || existingLiveMatches.length === 0)) {
-      console.log('🎯 Nenhum jogo ao vivo encontrado. Criando 3 jogos de demonstração...')
+      console.log('🎮 Criando jogos de demonstração...')
       
       const demoMatches = [
         {
@@ -413,7 +416,7 @@ Deno.serve(async (req) => {
           .single()
 
         if (!existingDemo) {
-          console.log(`🎮 Criando jogo demo AO VIVO: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
+          console.log(`🎮 Criando jogo demo: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
           
           const { data: newMatch, error: insertError } = await supabaseClient
             .from('matches')
@@ -472,16 +475,18 @@ Deno.serve(async (req) => {
 
             processedLiveMatches++
             console.log(`✅ Jogo demo criado: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
+          } else {
+            console.log(`❌ Erro ao criar jogo demo: ${insertError}`)
           }
         } else {
           console.log(`⏭️ Jogo demo já existe: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
         }
       }
     } else {
-      console.log(`⏭️ Não criando jogos demo - Processados: ${processedLiveMatches}, Existentes: ${existingLiveMatches?.length || 0}`)
+      console.log(`⏭️ Não criando jogos demo - API processou: ${processedLiveMatches}, Existentes no banco: ${existingLiveMatches?.length || 0}`)
     }
 
-    // Buscar todos os jogos (ao vivo e programados)
+    // Buscar todos os jogos para retornar
     const { data: allMatches, error: fetchError } = await supabaseClient
       .from('matches')
       .select(`
@@ -501,7 +506,7 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Retornando: ${liveMatches.length} jogos ao vivo + ${scheduledMatches.length} programados`)
     console.log('📊 Total de jogos no banco:', allMatches?.length || 0)
-    console.log(`🎯 Jogos processados: ${processedLiveMatches}`)
+    console.log(`🎯 Jogos processados da API: ${processedLiveMatches}`)
 
     return new Response(
       JSON.stringify({ 
