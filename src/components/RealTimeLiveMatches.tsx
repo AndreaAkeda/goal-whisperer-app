@@ -198,6 +198,12 @@ export const RealTimeLiveMatches = () => {
               • Quintas: Europa League (16h-18h)
             </p>
           </div>
+          <div className="bg-warning/10 p-4 rounded-lg text-left mb-4">
+            <p className="text-sm">
+              <strong>🧹 Sistema Limpo:</strong> Jogos antigos que não estão mais ao vivo foram removidos automaticamente. 
+              Apenas jogos realmente acontecendo agora aparecem aqui.
+            </p>
+          </div>
           <Button onClick={refreshMatches} variant="outline" disabled={isRefreshing}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             {isRefreshing ? 'Verificando...' : 'Verificar Jogos'}
@@ -216,7 +222,7 @@ export const RealTimeLiveMatches = () => {
             Jogos ao Vivo
           </h3>
           <p className="text-sm text-muted-foreground">
-            {realLiveMatches.length} jogo(s) da API Football • Dados reais • Atualização automática
+            {realLiveMatches.length} jogo(s) realmente ao vivo da API Football • Dados em tempo real
           </p>
         </div>
         <Button 
@@ -237,12 +243,12 @@ export const RealTimeLiveMatches = () => {
             <Globe className="h-5 w-5 text-success" />
             <div>
               <p className="text-sm font-medium">
-                API Football conectada - {realLiveMatches.length > 0 ? 'Jogos encontrados!' : 'Aguardando jogos ao vivo'}
+                API Football conectada - {realLiveMatches.length > 0 ? 'Jogos reais encontrados!' : 'Aguardando jogos ao vivo'}
               </p>
               <p className="text-xs text-muted-foreground">
                 {realLiveMatches.length > 0 
-                  ? `${realLiveMatches.length} jogo(s) ao vivo da API Football`
-                  : 'A API está funcionando, mas não há jogos ao vivo no momento.'
+                  ? `${realLiveMatches.length} jogo(s) realmente ao vivo da API Football`
+                  : 'A API está funcionando. Apenas jogos realmente ao vivo são exibidos aqui.'
                 }
               </p>
             </div>

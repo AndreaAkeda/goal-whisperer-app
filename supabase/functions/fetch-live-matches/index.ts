@@ -147,6 +147,19 @@ Deno.serve(async (req) => {
     console.log('🔄 Iniciando busca por jogos ao vivo...')
     console.log('🕐 Timestamp atual:', new Date().toISOString())
 
+    // PRIMEIRO: Limpar jogos antigos que não estão mais ao vivo
+    console.log('🧹 Limpando jogos antigos marcados como "live"...')
+    const { error: cleanupError } = await supabaseClient
+      .from('matches')
+      .update({ status: 'finished' })
+      .eq('status', 'live')
+    
+    if (cleanupError) {
+      console.log('❌ Erro ao limpar jogos antigos:', cleanupError)
+    } else {
+      console.log('✅ Jogos antigos limpos com sucesso')
+    }
+
     let apiMatches: ApiFootballMatch[] = []
     let apiError = null
 
@@ -188,6 +201,8 @@ Deno.serve(async (req) => {
               console.log(`     Status: ${match.fixture.status.short}, Minuto: ${match.fixture.status.elapsed}`)
               console.log(`     Placar: ${match.goals.home} - ${match.goals.away}`)
             })
+          } else {
+            console.log('📝 Nenhum jogo ao vivo encontrado na API')
           }
         }
       } catch (error) {
@@ -196,13 +211,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Processar apenas jogos da API se houver
+    // Processar APENAS jogos da API que estão realmente ao vivo
+    let processedLiveMatches = 0
     if (apiMatches.length > 0) {
       console.log(`🔄 Processando ${Math.min(apiMatches.length, 15)} jogos da API...`)
       
       for (const match of apiMatches.slice(0, 15)) {
         // Filtrar apenas jogos que estão realmente ao vivo
         if (match.fixture.status.short !== '1H' && match.fixture.status.short !== '2H' && match.fixture.status.short !== 'HT') {
+          console.log(`⏭️ Pulando jogo ${match.teams.home.name} vs ${match.teams.away.name} - Status: ${match.fixture.status.short}`)
           continue
         }
 
@@ -218,9 +235,9 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString()
         }
 
-        console.log(`💾 Processando jogo: ${matchData.home_team} vs ${matchData.away_team}`)
+        console.log(`💾 Processando jogo AO VIVO: ${matchData.home_team} vs ${matchData.away_team}`)
 
-        // Verificar se o jogo já existe e buscar análise anterior
+        // Verificar se o jogo já existe usando o ID da fixture
         const { data: existingMatch } = await supabaseClient
           .from('matches')
           .select(`
@@ -251,7 +268,7 @@ Deno.serve(async (req) => {
             console.log('✅ Jogo atualizado com sucesso')
           }
         } else {
-          console.log(`➕ Criando novo jogo: ${matchData.home_team} vs ${matchData.away_team}`)
+          console.log(`➕ Criando novo jogo AO VIVO: ${matchData.home_team} vs ${matchData.away_team}`)
           
           const { data: newMatch, error: insertError } = await supabaseClient
             .from('matches')
@@ -337,9 +354,11 @@ Deno.serve(async (req) => {
             console.log('❌ Erro ao criar métricas:', metricsError)
           }
         }
+
+        processedLiveMatches++
       }
     } else {
-      console.log('📝 Nenhum jogo da API encontrado')
+      console.log('📝 Nenhum jogo da API encontrado para processar')
     }
 
     // Criar alguns jogos programados para a demonstração da aba Pré-Live
@@ -426,7 +445,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Buscar todos os jogos (ao vivo + programados)
+    // Buscar APENAS jogos realmente ao vivo e programados
     const { data: updatedMatches, error: fetchError } = await supabaseClient
       .from('matches')
       .select(`
@@ -434,6 +453,7 @@ Deno.serve(async (req) => {
         match_analysis(*),
         match_metrics(*)
       `)
+      .in('status', ['live', 'scheduled'])
       .order('kickoff_time', { ascending: true })
 
     if (fetchError) {
@@ -443,8 +463,9 @@ Deno.serve(async (req) => {
     const liveMatches = updatedMatches?.filter(match => match.status === 'live') || []
     const scheduledMatches = updatedMatches?.filter(match => match.status === 'scheduled') || []
 
-    console.log(`📊 Retornando: ${liveMatches.length} jogos ao vivo + ${scheduledMatches.length} programados`)
+    console.log(`📊 Retornando: ${liveMatches.length} jogos ao vivo REAIS + ${scheduledMatches.length} programados`)
     console.log('📊 Total de jogos no banco:', updatedMatches?.length || 0)
+    console.log(`🎯 Jogos processados da API: ${processedLiveMatches}`)
 
     return new Response(
       JSON.stringify({ 
@@ -455,6 +476,7 @@ Deno.serve(async (req) => {
           api_error: apiError,
           api_key_configured: !!apiKey,
           total: updatedMatches?.length || 0,
+          processed_live_matches: processedLiveMatches,
           timestamp: new Date().toISOString()
         }
       }),
