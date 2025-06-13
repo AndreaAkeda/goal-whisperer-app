@@ -194,8 +194,8 @@ Deno.serve(async (req) => {
           console.log(`✅ API retornou ${apiMatches.length} jogos`)
           
           if (apiMatches.length > 0) {
-            console.log('⚽ Primeiros 3 jogos encontrados:')
-            apiMatches.slice(0, 3).forEach((match, index) => {
+            console.log('⚽ Primeiros 5 jogos encontrados:')
+            apiMatches.slice(0, 5).forEach((match, index) => {
               console.log(`  ${index + 1}. ${match.teams.home.name} vs ${match.teams.away.name}`)
               console.log(`     Liga: ${match.league.name} (${match.league.country})`)
               console.log(`     Status: ${match.fixture.status.short}, Minuto: ${match.fixture.status.elapsed}`)
@@ -211,19 +211,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Processar APENAS jogos da API que estão realmente ao vivo
+    // Processar jogos da API que estão realmente ao vivo
     let processedLiveMatches = 0
     if (apiMatches.length > 0) {
-      console.log(`🔄 Processando ${Math.min(apiMatches.length, 15)} jogos da API...`)
+      console.log(`🔄 Processando todos os ${apiMatches.length} jogos da API...`)
       
-      for (const match of apiMatches.slice(0, 15)) {
-        // Filtrar apenas jogos que estão realmente ao vivo
-        if (match.fixture.status.short !== '1H' && match.fixture.status.short !== '2H' && match.fixture.status.short !== 'HT') {
+      for (const match of apiMatches) {
+        // Aceitar todos os status que indicam jogo ao vivo ou em andamento
+        const liveStatuses = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'SUSP', 'INT']
+        
+        if (!liveStatuses.includes(match.fixture.status.short)) {
           console.log(`⏭️ Pulando jogo ${match.teams.home.name} vs ${match.teams.away.name} - Status: ${match.fixture.status.short}`)
           continue
         }
 
         const matchData = {
+          external_id: match.fixture.id.toString(),
           home_team: match.teams.home.name,
           away_team: match.teams.away.name,
           league: `${match.league.name} (${match.league.country})`,
@@ -235,18 +238,16 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString()
         }
 
-        console.log(`💾 Processando jogo AO VIVO: ${matchData.home_team} vs ${matchData.away_team}`)
+        console.log(`💾 Processando jogo AO VIVO: ${matchData.home_team} vs ${matchData.away_team} (${match.fixture.status.short})`)
 
-        // Verificar se o jogo já existe usando o ID da fixture
+        // Verificar se o jogo já existe usando o external_id
         const { data: existingMatch } = await supabaseClient
           .from('matches')
           .select(`
             id,
             match_analysis(*)
           `)
-          .eq('home_team', match.teams.home.name)
-          .eq('away_team', match.teams.away.name)
-          .eq('kickoff_time', match.fixture.date)
+          .eq('external_id', match.fixture.id.toString())
           .single()
 
         let matchId: string
@@ -264,6 +265,7 @@ Deno.serve(async (req) => {
           
           if (updateError) {
             console.log('❌ Erro ao atualizar jogo:', updateError)
+            continue
           } else {
             console.log('✅ Jogo atualizado com sucesso')
           }
@@ -319,10 +321,18 @@ Deno.serve(async (req) => {
             .from('match_analysis')
             .update(newAnalysis)
             .eq('match_id', matchId)
+            
+          if (analysisError) {
+            console.log('❌ Erro ao atualizar análise:', analysisError)
+          }
         } else {
           const { error: analysisError } = await supabaseClient
             .from('match_analysis')
             .insert(newAnalysis)
+            
+          if (analysisError) {
+            console.log('❌ Erro ao criar análise:', analysisError)
+          }
         }
 
         // Verificar alertas após criar/atualizar a análise
@@ -339,9 +349,10 @@ Deno.serve(async (req) => {
               match_id: matchId,
               xg_home: xgHome,
               xg_away: xgAway,
+              xg_total: xgHome + xgAway,
               dangerous_attacks: Math.floor(Math.random() * 15) + 5,
-              possession_home: 45 + Math.random() * 20,
-              possession_away: 45 + Math.random() * 20,
+              possession_home: Math.floor(45 + Math.random() * 20),
+              possession_away: Math.floor(35 + Math.random() * 20),
               shots_home: Math.floor(Math.random() * 10) + 2,
               shots_away: Math.floor(Math.random() * 10) + 2,
               shots_on_target_home: Math.floor(Math.random() * 5) + 1,
@@ -357,16 +368,17 @@ Deno.serve(async (req) => {
 
         processedLiveMatches++
       }
-    } else {
-      console.log('📝 Nenhum jogo da API encontrado para processar')
     }
 
-    // Se não há jogos reais da API, criar alguns jogos de demonstração
+    console.log(`🎯 Processados ${processedLiveMatches} jogos ao vivo da API`)
+
+    // Se não há jogos reais da API, criar alguns jogos de demonstração APENAS se não houver nenhum jogo
     if (processedLiveMatches === 0) {
-      console.log('🎯 Criando jogos de demonstração...')
+      console.log('🎯 Nenhum jogo ao vivo da API encontrado. Criando jogos de demonstração...')
       
       const demoMatches = [
         {
+          external_id: 'demo_1',
           home_team: 'Real Madrid',
           away_team: 'Barcelona',
           league: 'La Liga (Espanha)',
@@ -377,6 +389,7 @@ Deno.serve(async (req) => {
           kickoff_time: new Date().toISOString()
         },
         {
+          external_id: 'demo_2',
           home_team: 'Manchester City',
           away_team: 'Arsenal',
           league: 'Premier League (Inglaterra)',
@@ -387,6 +400,7 @@ Deno.serve(async (req) => {
           kickoff_time: new Date().toISOString()
         },
         {
+          external_id: 'demo_3',
           home_team: 'PSG',
           away_team: 'Olympique de Marseille',
           league: 'Ligue 1 (França)',
@@ -399,64 +413,76 @@ Deno.serve(async (req) => {
       ]
 
       for (const demoMatch of demoMatches) {
-        console.log(`🎮 Criando jogo de demonstração: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
-        
-        const { data: newMatch, error: insertError } = await supabaseClient
+        // Verificar se já existe um jogo demo com esse ID
+        const { data: existingDemo } = await supabaseClient
           .from('matches')
-          .insert(demoMatch)
           .select('id')
+          .eq('external_id', demoMatch.external_id)
           .single()
 
-        if (newMatch && !insertError) {
-          // Criar análise para o jogo de demonstração
-          const totalGoals = demoMatch.score_home + demoMatch.score_away
-          let under45Probability = 85 - (totalGoals * 15) - (demoMatch.minute * 0.2)
-          under45Probability = Math.max(20, Math.min(95, under45Probability))
-
-          const currentOdds = 1.2 + (totalGoals * 0.3) + Math.random() * 0.4
-          const recommendedOdds = currentOdds * (1 + (Math.random() - 0.5) * 0.1)
-          const evPercentage = ((recommendedOdds / currentOdds - 1) * 100)
-
-          let recommendation = 'monitor'
-          if (evPercentage > 5) recommendation = 'enter'
-          if (evPercentage < -5) recommendation = 'avoid'
-
-          await supabaseClient
-            .from('match_analysis')
-            .insert({
-              match_id: newMatch.id,
-              under_45_probability: under45Probability,
-              current_odds: currentOdds,
-              recommended_odds: recommendedOdds,
-              ev_percentage: evPercentage,
-              recommendation: recommendation,
-              confidence_level: under45Probability > 70 ? 'high' : 'medium',
-              rating: Math.floor(under45Probability * 0.8 + Math.random() * 20)
-            })
-
-          // Criar métricas para o jogo
-          const xgHome = Math.random() * 2.5
-          const xgAway = Math.random() * 2.5
+        if (!existingDemo) {
+          console.log(`🎮 Criando jogo de demonstração: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
           
-          await supabaseClient
-            .from('match_metrics')
-            .insert({
-              match_id: newMatch.id,
-              xg_home: xgHome,
-              xg_away: xgAway,
-              dangerous_attacks: Math.floor(Math.random() * 15) + 5,
-              possession_home: 45 + Math.random() * 20,
-              possession_away: 45 + Math.random() * 20,
-              shots_home: Math.floor(Math.random() * 10) + 2,
-              shots_away: Math.floor(Math.random() * 10) + 2,
-              shots_on_target_home: Math.floor(Math.random() * 5) + 1,
-              shots_on_target_away: Math.floor(Math.random() * 5) + 1,
-              corners_home: Math.floor(Math.random() * 8),
-              corners_away: Math.floor(Math.random() * 8)
-            })
+          const { data: newMatch, error: insertError } = await supabaseClient
+            .from('matches')
+            .insert(demoMatch)
+            .select('id')
+            .single()
 
+          if (newMatch && !insertError) {
+            // Criar análise para o jogo de demonstração
+            const totalGoals = demoMatch.score_home + demoMatch.score_away
+            let under45Probability = 85 - (totalGoals * 15) - (demoMatch.minute * 0.2)
+            under45Probability = Math.max(20, Math.min(95, under45Probability))
+
+            const currentOdds = 1.2 + (totalGoals * 0.3) + Math.random() * 0.4
+            const recommendedOdds = currentOdds * (1 + (Math.random() - 0.5) * 0.1)
+            const evPercentage = ((recommendedOdds / currentOdds - 1) * 100)
+
+            let recommendation = 'monitor'
+            if (evPercentage > 5) recommendation = 'enter'
+            if (evPercentage < -5) recommendation = 'avoid'
+
+            await supabaseClient
+              .from('match_analysis')
+              .insert({
+                match_id: newMatch.id,
+                under_45_probability: under45Probability,
+                current_odds: currentOdds,
+                recommended_odds: recommendedOdds,
+                ev_percentage: evPercentage,
+                recommendation: recommendation,
+                confidence_level: under45Probability > 70 ? 'high' : 'medium',
+                rating: Math.floor(under45Probability * 0.8 + Math.random() * 20)
+              })
+
+            // Criar métricas para o jogo
+            const xgHome = Math.random() * 2.5
+            const xgAway = Math.random() * 2.5
+            
+            await supabaseClient
+              .from('match_metrics')
+              .insert({
+                match_id: newMatch.id,
+                xg_home: xgHome,
+                xg_away: xgAway,
+                xg_total: xgHome + xgAway,
+                dangerous_attacks: Math.floor(Math.random() * 15) + 5,
+                possession_home: Math.floor(45 + Math.random() * 20),
+                possession_away: Math.floor(35 + Math.random() * 20),
+                shots_home: Math.floor(Math.random() * 10) + 2,
+                shots_away: Math.floor(Math.random() * 10) + 2,
+                shots_on_target_home: Math.floor(Math.random() * 5) + 1,
+                shots_on_target_away: Math.floor(Math.random() * 5) + 1,
+                corners_home: Math.floor(Math.random() * 8),
+                corners_away: Math.floor(Math.random() * 8)
+              })
+
+            processedLiveMatches++
+            console.log(`✅ Jogo de demonstração criado: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
+          }
+        } else {
           processedLiveMatches++
-          console.log(`✅ Jogo de demonstração criado: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
         }
       }
     }
@@ -468,6 +494,7 @@ Deno.serve(async (req) => {
 
     const scheduledGames = [
       {
+        external_id: 'scheduled_1',
         home_team: 'Liverpool',
         away_team: 'Chelsea',
         league: 'Premier League (Inglaterra)',
@@ -478,6 +505,7 @@ Deno.serve(async (req) => {
         score_away: 0
       },
       {
+        external_id: 'scheduled_2',
         home_team: 'Bayern München',
         away_team: 'Borussia Dortmund',
         league: 'Bundesliga (Alemanha)',
@@ -488,6 +516,7 @@ Deno.serve(async (req) => {
         score_away: 0
       },
       {
+        external_id: 'scheduled_3',
         home_team: 'AC Milan',
         away_team: 'Inter Milan',
         league: 'Serie A (Itália)',
@@ -504,9 +533,7 @@ Deno.serve(async (req) => {
       const { data: existingGame } = await supabaseClient
         .from('matches')
         .select('id')
-        .eq('home_team', game.home_team)
-        .eq('away_team', game.away_team)
-        .eq('status', 'scheduled')
+        .eq('external_id', game.external_id)
         .single()
 
       if (!existingGame) {
