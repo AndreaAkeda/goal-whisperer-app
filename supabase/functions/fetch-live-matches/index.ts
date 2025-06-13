@@ -147,6 +147,19 @@ Deno.serve(async (req) => {
     console.log('🔄 Iniciando busca por jogos ao vivo...')
     console.log('🕐 Timestamp atual:', new Date().toISOString())
 
+    // Primeiro, limpar jogos demo existentes
+    console.log('🧹 Removendo jogos demo existentes...')
+    const { error: deleteError } = await supabaseClient
+      .from('matches')
+      .delete()
+      .like('external_id', 'demo_%')
+    
+    if (deleteError) {
+      console.log('❌ Erro ao deletar jogos demo:', deleteError)
+    } else {
+      console.log('✅ Jogos demo removidos')
+    }
+
     let apiMatches: ApiFootballMatch[] = []
     let apiError = null
     let processedLiveMatches = 0
@@ -182,8 +195,8 @@ Deno.serve(async (req) => {
           console.log(`✅ API retornou ${apiMatches.length} jogos`)
           
           if (apiMatches.length > 0) {
-            console.log('⚽ Primeiros 5 jogos encontrados:')
-            apiMatches.slice(0, 5).forEach((match, index) => {
+            console.log('⚽ Jogos ao vivo encontrados:')
+            apiMatches.forEach((match, index) => {
               console.log(`  ${index + 1}. ${match.teams.home.name} vs ${match.teams.away.name}`)
               console.log(`     Liga: ${match.league.name} (${match.league.country})`)
               console.log(`     Status: ${match.fixture.status.short}, Minuto: ${match.fixture.status.elapsed}`)
@@ -201,10 +214,10 @@ Deno.serve(async (req) => {
 
     // Processar jogos da API que estão ao vivo
     if (apiMatches.length > 0) {
-      console.log(`🔄 Processando todos os ${apiMatches.length} jogos da API...`)
+      console.log(`🔄 Processando ${apiMatches.length} jogos da API...`)
       
       for (const match of apiMatches) {
-        // Status que indicam jogo ao vivo - expandindo a lista
+        // Status que indicam jogo ao vivo
         const liveStatuses = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE']
         
         if (!liveStatuses.includes(match.fixture.status.short)) {
@@ -235,7 +248,7 @@ Deno.serve(async (req) => {
             match_analysis(*)
           `)
           .eq('external_id', match.fixture.id.toString())
-          .single()
+          .maybeSingle()
 
         let matchId: string
         let oldAnalysis: MatchAnalysis | undefined
@@ -322,7 +335,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Verificar alertas
+        // Verificar alertas apenas para jogos reais
         await checkForAlerts(supabaseClient, matchId, matchData.home_team, matchData.away_team, newAnalysis, oldAnalysis)
 
         // Criar métricas se não existir
@@ -336,7 +349,6 @@ Deno.serve(async (req) => {
               match_id: matchId,
               xg_home: xgHome,
               xg_away: xgAway,
-              xg_total: xgHome + xgAway,
               dangerous_attacks: Math.floor(Math.random() * 15) + 5,
               possession_home: Math.floor(45 + Math.random() * 20),
               possession_away: Math.floor(35 + Math.random() * 20),
@@ -359,134 +371,7 @@ Deno.serve(async (req) => {
 
     console.log(`🎯 Processados ${processedLiveMatches} jogos ao vivo da API`)
 
-    // Verificar jogos existentes no banco
-    const { data: existingLiveMatches } = await supabaseClient
-      .from('matches')
-      .select('id')
-      .eq('status', 'live')
-
-    console.log(`📊 Jogos "live" existentes no banco: ${existingLiveMatches?.length || 0}`)
-
-    // Criar jogos de demonstração apenas se NÃO há jogos ao vivo
-    if (processedLiveMatches === 0 && (!existingLiveMatches || existingLiveMatches.length === 0)) {
-      console.log('🎮 Criando jogos de demonstração...')
-      
-      const demoMatches = [
-        {
-          external_id: 'demo_live_1',
-          home_team: 'Real Madrid',
-          away_team: 'Barcelona',
-          league: 'La Liga (Espanha)',
-          status: 'live',
-          minute: 23,
-          score_home: 0,
-          score_away: 1,
-          kickoff_time: new Date().toISOString()
-        },
-        {
-          external_id: 'demo_live_2',
-          home_team: 'Manchester City',
-          away_team: 'Arsenal',
-          league: 'Premier League (Inglaterra)',
-          status: 'live',
-          minute: 67,
-          score_home: 2,
-          score_away: 1,
-          kickoff_time: new Date().toISOString()
-        },
-        {
-          external_id: 'demo_live_3',
-          home_team: 'PSG',
-          away_team: 'Olympique de Marseille',
-          league: 'Ligue 1 (França)',
-          status: 'live',
-          minute: 89,
-          score_home: 1,
-          score_away: 2,
-          kickoff_time: new Date().toISOString()
-        }
-      ]
-
-      for (const demoMatch of demoMatches) {
-        // Verificar se já existe
-        const { data: existingDemo } = await supabaseClient
-          .from('matches')
-          .select('id')
-          .eq('external_id', demoMatch.external_id)
-          .single()
-
-        if (!existingDemo) {
-          console.log(`🎮 Criando jogo demo: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
-          
-          const { data: newMatch, error: insertError } = await supabaseClient
-            .from('matches')
-            .insert(demoMatch)
-            .select('id')
-            .single()
-
-          if (newMatch && !insertError) {
-            // Criar análise para o jogo demo
-            const totalGoals = demoMatch.score_home + demoMatch.score_away
-            let under45Probability = 85 - (totalGoals * 15) - (demoMatch.minute * 0.2)
-            under45Probability = Math.max(20, Math.min(95, under45Probability))
-
-            const currentOdds = 1.2 + (totalGoals * 0.3) + Math.random() * 0.4
-            const recommendedOdds = currentOdds * (1 + (Math.random() - 0.5) * 0.1)
-            const evPercentage = ((recommendedOdds / currentOdds - 1) * 100)
-
-            let recommendation = 'monitor'
-            if (evPercentage > 5) recommendation = 'enter'
-            if (evPercentage < -5) recommendation = 'avoid'
-
-            await supabaseClient
-              .from('match_analysis')
-              .insert({
-                match_id: newMatch.id,
-                under_45_probability: under45Probability,
-                current_odds: currentOdds,
-                recommended_odds: recommendedOdds,
-                ev_percentage: evPercentage,
-                recommendation: recommendation,
-                confidence_level: under45Probability > 70 ? 'high' : 'medium',
-                rating: Math.floor(under45Probability * 0.8 + Math.random() * 20)
-              })
-
-            // Criar métricas
-            const xgHome = Math.random() * 2.5
-            const xgAway = Math.random() * 2.5
-            
-            await supabaseClient
-              .from('match_metrics')
-              .insert({
-                match_id: newMatch.id,
-                xg_home: xgHome,
-                xg_away: xgAway,
-                xg_total: xgHome + xgAway,
-                dangerous_attacks: Math.floor(Math.random() * 15) + 5,
-                possession_home: Math.floor(45 + Math.random() * 20),
-                possession_away: Math.floor(35 + Math.random() * 20),
-                shots_home: Math.floor(Math.random() * 10) + 2,
-                shots_away: Math.floor(Math.random() * 10) + 2,
-                shots_on_target_home: Math.floor(Math.random() * 5) + 1,
-                shots_on_target_away: Math.floor(Math.random() * 5) + 1,
-                corners_home: Math.floor(Math.random() * 8),
-                corners_away: Math.floor(Math.random() * 8)
-              })
-
-            processedLiveMatches++
-            console.log(`✅ Jogo demo criado: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
-          } else {
-            console.log(`❌ Erro ao criar jogo demo: ${insertError}`)
-          }
-        } else {
-          console.log(`⏭️ Jogo demo já existe: ${demoMatch.home_team} vs ${demoMatch.away_team}`)
-        }
-      }
-    } else {
-      console.log(`⏭️ Não criando jogos demo - API processou: ${processedLiveMatches}, Existentes no banco: ${existingLiveMatches?.length || 0}`)
-    }
-
-    // Buscar todos os jogos para retornar
+    // Buscar todos os jogos para retornar (apenas reais, sem demos)
     const { data: allMatches, error: fetchError } = await supabaseClient
       .from('matches')
       .select(`
@@ -494,6 +379,7 @@ Deno.serve(async (req) => {
         match_analysis(*),
         match_metrics(*)
       `)
+      .not('external_id', 'like', 'demo_%')
       .in('status', ['live', 'scheduled'])
       .order('kickoff_time', { ascending: true })
 
@@ -505,8 +391,12 @@ Deno.serve(async (req) => {
     const scheduledMatches = allMatches?.filter(match => match.status === 'scheduled') || []
 
     console.log(`📊 Retornando: ${liveMatches.length} jogos ao vivo + ${scheduledMatches.length} programados`)
-    console.log('📊 Total de jogos no banco:', allMatches?.length || 0)
+    console.log('📊 Total de jogos reais no banco:', allMatches?.length || 0)
     console.log(`🎯 Jogos processados da API: ${processedLiveMatches}`)
+
+    if (liveMatches.length === 0) {
+      console.log('📭 Nenhum jogo ao vivo disponível no momento')
+    }
 
     return new Response(
       JSON.stringify({ 
@@ -518,7 +408,8 @@ Deno.serve(async (req) => {
           api_key_configured: !!apiKey,
           total: allMatches?.length || 0,
           processed_live_matches: processedLiveMatches,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          demo_mode: false
         }
       }),
       { 
@@ -540,6 +431,7 @@ Deno.serve(async (req) => {
           scheduled_matches: 0,
           api_error: error.message,
           total: 0,
+          demo_mode: false,
           timestamp: new Date().toISOString()
         }
       }),
