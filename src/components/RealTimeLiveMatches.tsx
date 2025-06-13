@@ -136,12 +136,22 @@ const MatchCard = ({ match }: { match: MatchWithAnalysis }) => {
 };
 
 export const RealTimeLiveMatches = () => {
-  const { data: liveMatches = [], isLoading, error, isError, refreshMatches, isRefreshing } = useRealTimeMatches();
+  const { data: allMatches = [], isLoading, error, isError, refreshMatches, isRefreshing } = useRealTimeMatches();
 
-  // Filtrar apenas jogos ao vivo
-  const realLiveMatches = liveMatches.filter(match => match.status === 'live');
+  console.log('🔍 Debug - Todos os jogos recebidos:', allMatches);
+  console.log('🔍 Debug - Quantidade total:', allMatches.length);
+
+  // Mostrar TODOS os jogos que têm status 'live' - sem filtros adicionais
+  const liveMatches = allMatches.filter(match => {
+    console.log(`🔍 Verificando jogo: ${match.home_team} vs ${match.away_team} - Status: ${match.status}`);
+    return match.status === 'live';
+  });
+
+  console.log('🔍 Debug - Jogos filtrados como live:', liveMatches);
+  console.log('🔍 Debug - Quantidade de jogos live:', liveMatches.length);
 
   if (error) {
+    console.error('❌ Erro completo:', error);
     return (
       <Card>
         <CardContent className="p-6 text-center">
@@ -150,7 +160,7 @@ export const RealTimeLiveMatches = () => {
             <div>
               <p className="text-destructive font-medium">Erro ao carregar jogos ao vivo</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Verifique os logs da função ou tente novamente
+                {error.message || 'Verifique os logs da função ou tente novamente'}
               </p>
             </div>
             <Button onClick={refreshMatches} variant="outline">
@@ -181,29 +191,28 @@ export const RealTimeLiveMatches = () => {
     );
   }
 
-  if (realLiveMatches.length === 0) {
+  if (liveMatches.length === 0) {
     return (
       <Card>
         <CardContent className="p-8 text-center">
           <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <CardTitle className="mb-2">Nenhum jogo ao vivo</CardTitle>
+          <CardTitle className="mb-2">Nenhum jogo ao vivo no momento</CardTitle>
           <p className="text-muted-foreground mb-4">
-            Não há jogos ao vivo no momento. A API Football está conectada e funcionando.
+            {allMatches.length > 0 
+              ? `Encontramos ${allMatches.length} jogo(s) no total, mas nenhum está marcado como "live"`
+              : 'Não há jogos disponíveis no momento.'
+            }
           </p>
+          
           <div className="bg-info/10 p-4 rounded-lg text-left mb-4">
             <p className="text-sm">
-              <strong>⏰ Dica:</strong> Jogos europeus geralmente acontecem:<br/>
-              • Sábados/Domingos: 13h-17h (horário brasileiro)<br/>
-              • Quartas: Champions League (16h-18h)<br/>
-              • Quintas: Europa League (16h-18h)
+              <strong>🔍 Debug Info:</strong><br/>
+              • Total de jogos: {allMatches.length}<br/>
+              • Jogos "live": {liveMatches.length}<br/>
+              • Status encontrados: {Array.from(new Set(allMatches.map(m => m.status))).join(', ')}
             </p>
           </div>
-          <div className="bg-warning/10 p-4 rounded-lg text-left mb-4">
-            <p className="text-sm">
-              <strong>🧹 Sistema Limpo:</strong> Jogos antigos que não estão mais ao vivo foram removidos automaticamente. 
-              Apenas jogos realmente acontecendo agora aparecem aqui.
-            </p>
-          </div>
+          
           <Button onClick={refreshMatches} variant="outline" disabled={isRefreshing}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             {isRefreshing ? 'Verificando...' : 'Verificar Jogos'}
@@ -222,7 +231,7 @@ export const RealTimeLiveMatches = () => {
             Jogos ao Vivo
           </h3>
           <p className="text-sm text-muted-foreground">
-            {realLiveMatches.length} jogo(s) realmente ao vivo da API Football • Dados em tempo real
+            {liveMatches.length} jogo(s) ao vivo • Dados em tempo real da API Football
           </p>
         </div>
         <Button 
@@ -237,19 +246,16 @@ export const RealTimeLiveMatches = () => {
       </div>
 
       {/* Status da API */}
-      <Card className="border-success">
+      <Card className="border-info">
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
-            <Globe className="h-5 w-5 text-success" />
+            <Globe className="h-5 w-5 text-info" />
             <div>
               <p className="text-sm font-medium">
-                API Football conectada - {realLiveMatches.length > 0 ? 'Jogos reais encontrados!' : 'Aguardando jogos ao vivo'}
+                API Football Status: {liveMatches.length > 0 ? 'Jogos encontrados!' : 'Conectada - Aguardando jogos'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {realLiveMatches.length > 0 
-                  ? `${realLiveMatches.length} jogo(s) realmente ao vivo da API Football`
-                  : 'A API está funcionando. Apenas jogos realmente ao vivo são exibidos aqui.'
-                }
+                Total: {allMatches.length} jogos • Live: {liveMatches.length} jogos
               </p>
             </div>
           </div>
@@ -258,7 +264,7 @@ export const RealTimeLiveMatches = () => {
 
       {/* Jogos ao vivo */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {realLiveMatches.map((match) => (
+        {liveMatches.map((match) => (
           <MatchCard key={match.id} match={match} />
         ))}
       </div>
